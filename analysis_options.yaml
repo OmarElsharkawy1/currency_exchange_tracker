@@ -1,0 +1,12 @@
+include: package:very_good_analysis/analysis_options.10.2.0.yaml
+
+analyzer:
+  errors:
+    # Hard project rule: a missing `const` is a build failure, not a hint.
+    prefer_const_constructors: error
+    prefer_const_constructors_in_immutables: error
+    prefer_const_declarations: error
+    prefer_const_literals_to_create_immutables: error
+  exclude:
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
