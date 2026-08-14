@@ -1,4 +1,4 @@
-# prompt
+# prompt1
 
 Read CLAUDE.md fully before writing anything. Create the Flutter project scaffold for the Currency Exchange Tracker. In this phase, build ONLY:
 
@@ -72,3 +72,65 @@ Read CLAUDE.md fully before writing anything. Create the Flutter project scaffol
 
 > Allow claude to run Format & analyze
 > allowed
+
+# prompt2
+
+Implement `ExchangeRate` in `features/rates/domain/` exactly per the "Rate math" section of CLAUDE.md, plus a `RateDirection` enum (`egpStrengthening`, `egpWeakening`, `flat`).
+
+> Pure Dart only — importing anything from Flutter in this file is a failure.
+>
+> Write tests FIRST, then the implementation. Required fixtures:
+>
+> 1. rawYesterday = 0.019227, rawToday = 0.019100 → display goes 52.01 → 52.36 (UP), direction = egpWeakening. Assert change and percent are computed on INVERTED values (use `closeTo`).
+> 2. The mirror case: raw rises → display falls → egpStrengthening.
+> 3. Prove invert-before-diff ≠ diff-then-invert: assert the correct change value and assert it differs from `1/(rawToday − rawYesterday)`-style math.
+> 4. JPY small-magnitude case (display ≈ 0.33 EGP): percentage still correct.
+> 5. Equal rates → flat, zero change.
+>
+> Also: `Currency` enum or value type for the five currencies (code, English name, response key `usd`/`eur`/`gbp`/`sar`/`jpy`).
+
+> allow claude to Read existing test and core conventions?
+> rtk read test/core/extensions/date_time_extensions_test.dart && echo "=== failures ===" && rtk read lib/core/failures/failure.dart && echo "=== analysis ===" && rtk read analysis_options.yaml
+> allowed
+
+> Allow claude to write currency_test.dart
+> /Users/omarelsharkawy/Dev/projects/currency_exchange_tracker/test/features/rates/domain/currency_test.dart
+> allowed
+
+> Allow claude to write exchange_rate_test.dart
+> /Users/omarelsharkawy/Dev/projects/currency_exchange_tracker/test/features/rates/domain/exchange_rate_test.dart
+> allowed
+
+> Allow claude to Run domain tests, expect failure?
+> flutter test test/features/rates/domain/ 2>&1 | tail -20
+> allowed
+> RED confirmed
+
+> Allow claude to write currency.dart
+> /Users/omarelsharkawy/Dev/projects/currency_exchange_tracker/lib/features/rates/domain/currency.dart
+> allowed
+
+> Allow claude to write rate_direction.dart
+> /Users/omarelsharkawy/Dev/projects/currency_exchange_tracker/lib/features/rates/domain/rate_direction.dart
+> allowed
+
+> Allow claude to write exchange_rate.dart
+> /Users/omarelsharkawy/Dev/projects/currency_exchange_tracker/lib/features/rates/domain/exchange_rate.dart
+> allowed
+
+> Allow claude to run domain tests?
+> flutter test test/features/rates/domain/ 2>&1 | tail -25
+> allowed
+> +28: All tests passed!
+
+> Allow claude to run Format, analyze, full tests?
+> allowed
+> +40: All tests passed!
+
+> Allow claude to run List analyzer issues?
+> flutter analyze 2>&1 | grep -E "error|info|warning" | head -10
+> allowed
+> error • Use 'const' for final variables initialized to a constant value • test/features/rates/domain/exchange_rate_test.dart:80:7 • prefer_const_declarations
+> error • Use 'const' for final variables initialized to a constant value • test/features/rates/domain/exchange_rate_test.dart:87:7 • prefer_const_declarations
+> error • Use 'const' for final variables initialized to a constant value • test/features/rates/domain/exchange_rate_test.dart:99:7 • prefer_const_declarations
+> info • Unnecessary use of a 'double' literal • test/features/rates/domain/exchange_rate_test.dart:113:26 • prefer_int_literals
