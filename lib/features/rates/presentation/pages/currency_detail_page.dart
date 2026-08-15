@@ -10,6 +10,7 @@ import 'package:currency_exchange_tracker/features/rates/presentation/blocs/curr
 import 'package:currency_exchange_tracker/features/rates/presentation/blocs/currency_detail_event.dart';
 import 'package:currency_exchange_tracker/features/rates/presentation/blocs/currency_detail_state.dart';
 import 'package:currency_exchange_tracker/features/rates/presentation/formatting/rate_semantics.dart';
+import 'package:currency_exchange_tracker/features/rates/presentation/widgets/currency_badge.dart';
 import 'package:currency_exchange_tracker/features/rates/presentation/widgets/rate_history_chart.dart';
 import 'package:currency_exchange_tracker/features/rates/presentation/widgets/rate_history_chart_skeleton.dart';
 import 'package:currency_exchange_tracker/features/rates/presentation/widgets/rates_error_view.dart';
@@ -152,25 +153,20 @@ class _RateHeader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Fixed height: the chip appears and disappears with the
-          // selection, and nothing below may move when it does.
+          // Sized by the badge, which is the tallest thing in the row and is
+          // always present: the chip comes and goes with the selection, and
+          // nothing below may move when it does. Sizing to the badge also
+          // keeps its rect identical to the list row's, so the hero flight
+          // has nothing to interpolate.
           SizedBox(
-            height: AppSpacing.headerActionRow,
+            height: CurrencyBadge.size,
             child: Row(
               children: [
-                // The app bar already names the currency; this is the code
-                // the list row flies in.
+                // The badge is what flies in from the list row; the app bar
+                // already names the currency, so nothing else is repeated.
                 Hero(
                   tag: heroTag,
-                  child: Material(
-                    type: MaterialType.transparency,
-                    child: Text(
-                      point.currency.code,
-                      style: context.textStyles.labelLarge?.copyWith(
-                        color: context.colors.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
+                  child: CurrencyBadge(currency: point.currency),
                 ),
                 const Spacer(),
                 switch (isShowingLatest) {

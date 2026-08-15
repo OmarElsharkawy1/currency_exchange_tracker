@@ -1,5 +1,6 @@
 import 'package:bloc_test/bloc_test.dart';
 import 'package:currency_exchange_tracker/core/failures/failures.dart';
+import 'package:currency_exchange_tracker/core/formatting/rate_formatter.dart';
 import 'package:currency_exchange_tracker/core/theme/app_spacing.dart';
 import 'package:currency_exchange_tracker/core/theme/app_theme.dart';
 import 'package:currency_exchange_tracker/core/theme/theme_mode_button.dart';
@@ -345,6 +346,83 @@ void main() {
     });
   });
 
+  group('the value axis', () {
+    // The seven-day fixture runs 0.019300 down to 0.019050 raw, so the
+    // display extremes are these.
+    const lowest = '51.81';
+    const highest = '52.49';
+
+    testWidgets('labels the series low and high at display precision', (
+      tester,
+    ) async {
+      await pumpPage(tester, HistoryLoadSuccess(history: sevenDays));
+
+      expect(find.text(lowest), findsOneWidget);
+      expect(find.text(highest), findsOneWidget);
+    });
+
+    testWidgets('the labels are the data extremes, not the padded frame', (
+      tester,
+    ) async {
+      await pumpPage(tester, HistoryLoadSuccess(history: sevenDays));
+
+      final spots = barOf(tester).spots.map((spot) => spot.y).toList()..sort();
+      expect(find.text(RateFormatter.spokenRate(spots.first)), findsOneWidget);
+      expect(find.text(RateFormatter.spokenRate(spots.last)), findsOneWidget);
+
+      final chart = tester.widget<LineChart>(find.byType(LineChart));
+      expect(chart.data.minY, lessThan(spots.first));
+      expect(chart.data.maxY, greaterThan(spots.last));
+    });
+
+    testWidgets('labels the midpoint when there is room', (tester) async {
+      await pumpPage(tester, HistoryLoadSuccess(history: sevenDays));
+
+      final spots = barOf(tester).spots.map((spot) => spot.y).toList()..sort();
+      final midpoint = (spots.first + spots.last) / 2;
+
+      expect(find.text(RateFormatter.spokenRate(midpoint)), findsOneWidget);
+    });
+
+    testWidgets('pads the frame by a tenth of the range, not more', (
+      tester,
+    ) async {
+      await pumpPage(tester, HistoryLoadSuccess(history: sevenDays));
+
+      final spots = barOf(tester).spots.map((spot) => spot.y).toList()..sort();
+      final range = spots.last - spots.first;
+      final chart = tester.widget<LineChart>(find.byType(LineChart));
+
+      expect(
+        spots.first - chart.data.minY,
+        closeTo(range * RateHistoryChart.verticalHeadroom, 1e-6),
+      );
+      expect(
+        chart.data.maxY - spots.last,
+        closeTo(range * RateHistoryChart.verticalHeadroom, 1e-6),
+      );
+    });
+
+    testWidgets('reserves a constant width for the labels', (tester) async {
+      await pumpPage(tester, HistoryLoadSuccess(history: sevenDays));
+
+      final chart = tester.widget<LineChart>(find.byType(LineChart));
+      expect(
+        chart.data.titlesData.leftTitles.sideTitles.reservedSize,
+        RateHistoryChart.axisValueWidth,
+      );
+    });
+
+    testWidgets('smooths the line without inventing shapes', (tester) async {
+      await pumpPage(tester, HistoryLoadSuccess(history: sevenDays));
+
+      final bar = barOf(tester);
+      expect(bar.isCurved, isTrue);
+      expect(bar.preventCurveOverShooting, isTrue);
+      expect(bar.curveSmoothness, RateHistoryChart.curveSmoothness);
+    });
+  });
+
   group('chart touches reach the bloc', () {
     RateHistoryChart chartOf(WidgetTester tester) =>
         tester.widget<RateHistoryChart>(find.byType(RateHistoryChart));
@@ -470,7 +548,8 @@ void main() {
         of: find.byType(SideTitleWidget),
         matching: find.byType(Text),
       );
-      expect(labels, findsNWidgets(7));
+      // Seven dates along the bottom, plus the low/mid/high value column.
+      expect(labels, findsNWidgets(sevenDays.length + 3));
       for (final label in labels.evaluate()) {
         final rect = tester.getRect(find.byWidget(label.widget));
         expect(rect.left, greaterThanOrEqualTo(chart.left));

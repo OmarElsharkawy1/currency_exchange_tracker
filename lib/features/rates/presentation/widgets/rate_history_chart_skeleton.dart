@@ -16,7 +16,7 @@ class RateHistoryChartSkeleton extends StatelessWidget {
   ///
   /// Relative heights of the placeholder columns, as a fraction of the plot
   /// area. Uneven on purpose: a flat row of bars reads as a table.
-  static const List<double> _columnHeights = <double>[
+  static const List<double> columnHeights = <double>[
     0.45,
     0.62,
     0.38,
@@ -28,31 +28,50 @@ class RateHistoryChartSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Skeletonizer(
-      child: Column(
+    return const Skeletonizer(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) => Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  for (final height in _columnHeights)
-                    _Column(height: constraints.maxHeight * height),
-                ],
-              ),
-            ),
-          ),
-          // The loaded chart reserves this much for its date row; the
-          // skeleton reserves the same, so nothing shifts when it resolves.
-          const SizedBox(height: AppSpacing.sectionGap),
-          const SizedBox(
-            height: RateHistoryChart.axisLabelHeight,
-            child: _AxisLabels(),
-          ),
+          // The loaded chart reserves this much for its value column; the
+          // skeleton reserves the same, so the plot does not slide sideways
+          // when history arrives.
+          SizedBox(width: RateHistoryChart.axisValueWidth),
+          Expanded(child: _Silhouette()),
         ],
       ),
+    );
+  }
+}
+
+/// The placeholder plot: uneven columns over a reserved date row.
+class _Silhouette extends StatelessWidget {
+  const _Silhouette();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) => Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                for (final height in RateHistoryChartSkeleton.columnHeights)
+                  _Column(height: constraints.maxHeight * height),
+              ],
+            ),
+          ),
+        ),
+        // The loaded chart reserves this much for its date row; the skeleton
+        // reserves the same, so nothing shifts when it resolves.
+        const SizedBox(height: AppSpacing.sectionGap),
+        const SizedBox(
+          height: RateHistoryChart.axisLabelHeight,
+          child: _AxisLabels(),
+        ),
+      ],
     );
   }
 }
@@ -82,7 +101,7 @@ class _AxisLabels extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        for (final _ in RateHistoryChartSkeleton._columnHeights)
+        for (final _ in RateHistoryChartSkeleton.columnHeights)
           const Bone.text(words: 1, fontSize: 12),
       ],
     );

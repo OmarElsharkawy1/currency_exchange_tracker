@@ -51,6 +51,28 @@ class RateHistoryChart extends StatelessWidget {
   /// the same room and the layout does not shift when history arrives.
   static const double axisLabelHeight = 28;
 
+  /// Horizontal space the value column occupies beside the plot.
+  ///
+  /// Wide enough for a rate at display precision, and shared with the
+  /// skeleton for the same reason as [axisLabelHeight].
+  static const double axisValueWidth = 52;
+
+  /// How much the line is smoothed between points.
+  ///
+  /// Low on purpose: a rate series is a sequence of real readings, and a
+  /// rounder line invents shapes between them that the data does not have.
+  static const double curveSmoothness = 0.2;
+
+  /// Headroom above and below the data, as a fraction of its range.
+  ///
+  /// Without it a week's wobble stretches to fill the full height and reads
+  /// as a dramatic move.
+  static const double verticalHeadroom = 0.1;
+
+  /// Below this height the midpoint label is dropped and only the extremes
+  /// are shown; three labels in a short chart collide.
+  static const double minHeightForMidpointLabel = 160;
+
   @override
   Widget build(BuildContext context) {
     final lineColor = context.colors.primary;
@@ -62,79 +84,114 @@ class RateHistoryChart extends StatelessWidget {
       // reader announces "…Egyptian pounds, Mar 1, 2, 3, 4…".
       excludeSemantics: true,
       label: _semanticsLabel,
-      child: LineChart(
-        duration: AppMotion.chart,
-        curve: AppMotion.curve,
-        LineChartData(
-          minY: bounds.min,
-          maxY: bounds.max,
-          gridData: FlGridData(
-            drawVerticalLine: false,
-            getDrawingHorizontalLine: (_) =>
-                FlLine(color: context.colors.outlineVariant, strokeWidth: 1),
-          ),
-          borderData: FlBorderData(show: false),
-          titlesData: FlTitlesData(
-            topTitles: const AxisTitles(),
-            rightTitles: const AxisTitles(),
-            leftTitles: const AxisTitles(),
-            bottomTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                // Every plotted day gets a label.
-                interval: 1,
-                reservedSize: axisLabelHeight,
-                getTitlesWidget: (value, meta) =>
-                    _DayLabel(meta: meta, label: _labelAt(value.toInt())),
+      child: LayoutBuilder(
+        builder: (context, constraints) => _chart(
+          context,
+          lineColor: lineColor,
+          bounds: bounds,
+          showMidpointLabel: constraints.maxHeight >= minHeightForMidpointLabel,
+        ),
+      ),
+    );
+  }
+
+  Widget _chart(
+    BuildContext context, {
+    required Color lineColor,
+    required ({double min, double max, double dataMin, double dataMax}) bounds,
+    required bool showMidpointLabel,
+  }) {
+    return LineChart(
+      duration: AppMotion.chart,
+      curve: AppMotion.curve,
+      LineChartData(
+        minY: bounds.min,
+        maxY: bounds.max,
+        // Ticks are measured from the data, not from the padded frame, so
+        // the labels read as the series' own low and high.
+        baselineY: bounds.dataMin,
+        gridData: FlGridData(
+          drawVerticalLine: false,
+          getDrawingHorizontalLine: (_) =>
+              FlLine(color: context.colors.outlineVariant, strokeWidth: 1),
+        ),
+        borderData: FlBorderData(show: false),
+        titlesData: FlTitlesData(
+          topTitles: const AxisTitles(),
+          rightTitles: const AxisTitles(),
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: axisValueWidth,
+              interval: _valueLabelInterval(
+                bounds,
+                withMidpoint: showMidpointLabel,
+              ),
+              // The padded frame is not a reading; only the data is.
+              minIncluded: false,
+              maxIncluded: false,
+              getTitlesWidget: (value, meta) => _ValueLabel(
+                meta: meta,
+                label: RateFormatter.spokenRate(value),
               ),
             ),
           ),
-          extraLinesData: ExtraLinesData(
-            verticalLines: [
-              for (final index in _selectedIndexes)
-                VerticalLine(
-                  x: index.toDouble(),
-                  color: context.colors.outline,
-                  strokeWidth: 1,
-                  dashArray: const [4, 3],
-                ),
-            ],
-          ),
-          lineTouchData: LineTouchData(
-            touchSpotThreshold: touchThreshold,
-            // The header is the readout: no tooltip, no built-in highlight.
-            handleBuiltInTouches: false,
-            touchCallback: _onTouch,
-          ),
-          lineBarsData: [
-            LineChartBarData(
-              spots: [
-                for (var index = 0; index < history.length; index++)
-                  FlSpot(index.toDouble(), history.points[index].displayRate),
-              ],
-              isCurved: true,
-              curveSmoothness: 0.25,
-              preventCurveOverShooting: true,
-              color: lineColor,
-              barWidth: 2.5,
-              dotData: FlDotData(
-                getDotPainter: (spot, percent, bar, index) =>
-                    _dotFor(context, index),
-              ),
-              belowBarData: BarAreaData(
-                show: true,
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    lineColor.withValues(alpha: 0.28),
-                    lineColor.withValues(alpha: 0),
-                  ],
-                ),
-              ),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              // Every plotted day gets a label.
+              interval: 1,
+              reservedSize: axisLabelHeight,
+              getTitlesWidget: (value, meta) =>
+                  _DayLabel(meta: meta, label: _labelAt(value.toInt())),
             ),
+          ),
+        ),
+        extraLinesData: ExtraLinesData(
+          verticalLines: [
+            for (final index in _selectedIndexes)
+              VerticalLine(
+                x: index.toDouble(),
+                color: context.colors.outline,
+                strokeWidth: 1,
+                dashArray: const [4, 3],
+              ),
           ],
         ),
+        lineTouchData: LineTouchData(
+          touchSpotThreshold: touchThreshold,
+          // The header is the readout: no tooltip, no built-in highlight.
+          handleBuiltInTouches: false,
+          touchCallback: _onTouch,
+        ),
+        lineBarsData: [
+          LineChartBarData(
+            spots: [
+              for (var index = 0; index < history.length; index++)
+                FlSpot(index.toDouble(), history.points[index].displayRate),
+            ],
+            isCurved: true,
+            curveSmoothness: curveSmoothness,
+            preventCurveOverShooting: true,
+            color: lineColor,
+            barWidth: 2.5,
+            dotData: FlDotData(
+              getDotPainter: (spot, percent, bar, index) =>
+                  _dotFor(context, index),
+            ),
+            belowBarData: BarAreaData(
+              show: true,
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  lineColor.withValues(alpha: 0.28),
+                  lineColor.withValues(alpha: 0),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -193,14 +250,45 @@ class RateHistoryChart extends StatelessWidget {
     };
   }
 
-  /// A little headroom either side so the line never touches the frame.
-  ({double min, double max}) get _bounds {
+  /// The plotted frame, and the data extremes it was built from.
+  ///
+  /// A flat series has no range to pad, so it gets a small absolute margin
+  /// instead — otherwise the frame collapses onto the line.
+  ({double min, double max, double dataMin, double dataMax}) get _bounds {
     final values = history.points.map((point) => point.displayRate).toList()
       ..sort();
     final lowest = values.first;
     final highest = values.last;
-    final padding = (highest - lowest) * 0.15;
-    return (min: lowest - padding, max: highest + padding);
+    final range = highest - lowest;
+    final padding = switch (range) {
+      0 => _flatSeriesMargin(highest),
+      _ => range * verticalHeadroom,
+    };
+    return (
+      min: lowest - padding,
+      max: highest + padding,
+      dataMin: lowest,
+      dataMax: highest,
+    );
+  }
+
+  static double _flatSeriesMargin(double value) {
+    final proportional = value.abs() * verticalHeadroom;
+    return proportional == 0 ? 1 : proportional;
+  }
+
+  /// The gap between value labels: half the data range for low/mid/high, the
+  /// whole range when there is only room for the extremes.
+  double _valueLabelInterval(
+    ({double min, double max, double dataMin, double dataMax}) bounds, {
+    required bool withMidpoint,
+  }) {
+    final range = bounds.dataMax - bounds.dataMin;
+    if (range == 0) return bounds.max - bounds.min;
+    return switch (withMidpoint) {
+      true => range / 2,
+      false => range,
+    };
   }
 
   void _onTouch(FlTouchEvent event, LineTouchResponse? response) {
@@ -220,6 +308,30 @@ class RateHistoryChart extends StatelessWidget {
       default:
         break;
     }
+  }
+}
+
+/// One value label beside the chart.
+class _ValueLabel extends StatelessWidget {
+  const _ValueLabel({required this.meta, required this.label});
+
+  final TitleMeta meta;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return SideTitleWidget(
+      meta: meta,
+      // Same treatment as the date row: the top and bottom labels sit on the
+      // frame's edge and would otherwise hang outside it.
+      fitInside: SideTitleFitInsideData.fromTitleMeta(meta),
+      child: Text(
+        label,
+        style: context.textStyles.bodySmall?.copyWith(
+          color: context.colors.onSurfaceVariant,
+        ),
+      ),
+    );
   }
 }
 

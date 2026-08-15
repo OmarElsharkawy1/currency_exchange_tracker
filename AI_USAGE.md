@@ -287,3 +287,33 @@ The animation removed rows from the semantics tree. The dump showed no row nodes
 The explicit clarity-over-flash calls: numbers roll on refresh only, never during a chart scrub, because rolling would lag the finger and display intermediate values that were never that day's rate; and RollingRate omits its tween begin so a first paint shows the real figure instead of counting up from zero.
 
 Follow-ups: None issued.
+
+# 2026-08-15 — Hero fix: badge instead of text
+
+Prompt: The Hero on the currency code clips to "US" mid-flight and pops to "USD" at the end — text snapshot at destination size, intermediate layouts truncate. Move the Hero tag off the code Text and onto a fixed-size currency badge, same tag list→detail; let the code and name in the detail header appear via the normal route fade with no Hero. Remove the text Hero entirely. Create a badge widget if none exists and use it on both screens. Verify by pushing and popping repeatedly — nothing may clip, snap or flash. Widget test: the same Hero tag exists exactly once on each screen. Stop and say so if a text Hero should be kept.
+
+Output: CurrencyBadge, a const 40×40 disc, is now the only thing either screen puts inside a Hero; both text Heroes are gone, along with the detail header's code line and the list row's separate code text. 6 tests on a real two-route app: tag present exactly once per screen, the Hero's child asserted to be a CurrencyBadge by type, identical measured size at both ends, a single distinct size across every mid-flight frame, and three push/pop round trips with no exception. 349 tests green, analyzer clean, format clean.
+
+Verdict: Accepted
+
+Why: [draft] Your diagnosis was right, and there was a second instance of the same defect one layer up that only measuring found. After moving the Hero onto the badge the whole suite passed — but the badge measured 40×40 on the list and 40×36 on the detail screen, because the header's top row still carried a fixed 36px height from the earlier chip-jump fix, quietly squeezing it. Unequal end rects are precisely what the Hero interpolates, so the fix would have shipped looking done while still clipping. The row is now sized by CurrencyBadge.size, which keeps the chip-doesn't-shove-the-layout property for free since the badge is the tallest always-present element; the orphaned headerActionRow token was deleted rather than left behind.
+
+The mid-flight test is the one that actually encodes the root cause: it collects the badge's size on every frame of the transition into a Set and asserts the set has exactly one member. A constant rect is what removes the interpolation, so that assertion fails the moment someone puts text back in the Hero or changes one screen's sizing.
+
+Follow-ups: None issued.
+
+# 2026-08-15 — Chart: value axis, curve tokens, padded range
+
+Prompt: On RateHistoryChart's LineChartBarData: keep isCurved, set preventCurveOverShooting: true and curveSmoothness to ~0.2 via a named constant in AppMotion or a chart-style token — no literals in the widget. Add a y-axis: left titles showing the range minimum and maximum (and the midpoint if it fits), formatted through intl at the same precision as the header, reserved width via a constant, SideTitleWidget with fitInside like the bottom axis. Pad the plotted y-range ~10% above and below the data. Update the skeleton to reserve the same left width. Widget test asserting the min/max labels equal the series extremes at display precision.
+
+Output: Style tokens (curveSmoothness, verticalHeadroom, axisValueWidth, minHeightForMidpointLabel) sit as named constants on the chart beside the existing touchThreshold / axisLabelHeight. Left axis renders low / midpoint / high through RateFormatter.spokenRate, wrapped in SideTitleWidget with fitInside. Frame padded 10% each side, with a separate absolute margin for a flat series. Skeleton reserves the same left width and its tree is now const. 8 new chart tests. 355 tests green, analyzer clean, format clean.
+
+Verdict: Accepted
+
+Why: [draft] The interesting constraint was that "labels show the range minimum and maximum" fights "pad the range 10%" — fl_chart generates ticks from the axis frame, so naive settings would have labelled the padded bounds, printing two numbers that appear nowhere in the data. Reading iterateThroughAxis in the package rather than guessing gave the mechanism: baselineY: dataMin with interval: range / 2 and minIncluded/maxIncluded: false makes the ticks measure from the data while the frame sits outside them. The test asserts the label text equals spokenRate of the real series extremes and that minY/maxY fall outside those values, so the two requirements are pinned against each other.
+
+"Midpoint if it fits" was implemented as an actual measurement — a LayoutBuilder drops to a two-label interval below 160px — rather than assumed to fit. The flat-series case was handled explicitly because a zero range makes both the padding and the tick interval degenerate.
+
+I put the curve token on the chart rather than in AppMotion as offered: that class is durations and curves for animation, and line smoothing is not motion. Flagged rather than assumed.
+
+Follow-ups: None issued.

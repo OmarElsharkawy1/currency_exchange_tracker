@@ -5,6 +5,7 @@ import 'package:currency_exchange_tracker/features/rates/domain/entities/rate_di
 import 'package:currency_exchange_tracker/features/rates/domain/entities/rate_history_point.dart';
 import 'package:currency_exchange_tracker/features/rates/presentation/formatting/rate_semantics.dart';
 import 'package:currency_exchange_tracker/features/rates/presentation/pages/currency_detail_page.dart';
+import 'package:currency_exchange_tracker/features/rates/presentation/widgets/currency_badge.dart';
 import 'package:currency_exchange_tracker/features/rates/presentation/widgets/rolling_rate.dart';
 import 'package:flutter/material.dart';
 
@@ -43,6 +44,11 @@ class RateRow extends StatelessWidget {
         ),
         child: Row(
           children: [
+            Hero(
+              tag: CurrencyDetailPage.heroTagFor(comparison.currency),
+              child: CurrencyBadge(currency: comparison.currency),
+            ),
+            const SizedBox(width: 12),
             Expanded(child: _CurrencyIdentity(comparison: comparison)),
             _RateMovement(comparison: comparison),
           ],
@@ -66,19 +72,6 @@ class _CurrencyIdentity extends StatelessWidget {
         Text(
           comparison.currency.englishName,
           style: context.textStyles.titleMedium,
-        ),
-        const SizedBox(height: 2),
-        Hero(
-          tag: CurrencyDetailPage.heroTagFor(comparison.currency),
-          child: Material(
-            type: MaterialType.transparency,
-            child: Text(
-              comparison.currency.code,
-              style: context.textStyles.bodySmall?.copyWith(
-                color: context.colors.onSurfaceVariant,
-              ),
-            ),
-          ),
         ),
       ],
     );
