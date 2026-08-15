@@ -1,4 +1,7 @@
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:currency_exchange_tracker/core/clock/clock.dart';
+import 'package:currency_exchange_tracker/core/connectivity/connectivity_cubit.dart';
+import 'package:currency_exchange_tracker/core/connectivity/connectivity_sources.dart';
 import 'package:currency_exchange_tracker/core/network/host_fallback_interceptor.dart';
 import 'package:currency_exchange_tracker/features/rates/data/data_sources/rates_local_data_source.dart';
 import 'package:currency_exchange_tracker/features/rates/data/data_sources/rates_remote_data_source.dart';
@@ -57,5 +60,16 @@ Future<void> configureDependencies() async {
     )
     ..registerFactory<CurrencyDetailBloc>(
       () => CurrencyDetailBloc(repository: getIt<RatesRepository>()),
+    )
+    // One instance for the whole app: connectivity is not per-screen, and a
+    // second probe would double every reachability check.
+    ..registerLazySingleton<ConnectivityCubit>(
+      () => ConnectivityCubit(
+        clock: getIt<Clock>(),
+        radioConnected: ConnectivitySources.radioConnected(Connectivity()),
+        internetReachable: ConnectivitySources.internetReachable(
+          ConnectivitySources.currencyApiProbe(),
+        ),
+      ),
     );
 }

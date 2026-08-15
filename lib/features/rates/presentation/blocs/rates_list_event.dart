@@ -15,8 +15,23 @@ final class RatesRequested extends RatesListEvent {
   const RatesRequested();
 }
 
-/// The user pulled to refresh, or connectivity came back: go past the cache.
+/// The user pulled to refresh: go past the cache.
 final class RatesRefreshed extends RatesListEvent {
   /// Creates the event.
   const RatesRefreshed();
+}
+
+/// Connectivity resolved to a new verdict.
+///
+/// The bloc reacts to the *transition*, not to the reading: coming back
+/// online refreshes once, and nothing else about connectivity moves state.
+final class RatesConnectivityChanged extends RatesListEvent {
+  /// Creates the event.
+  const RatesConnectivityChanged({required this.isOnline});
+
+  /// Whether the device can now reach the network.
+  final bool isOnline;
+
+  @override
+  List<Object?> get props => [isOnline];
 }

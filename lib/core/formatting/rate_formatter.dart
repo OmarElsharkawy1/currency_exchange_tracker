@@ -75,6 +75,34 @@ abstract final class RateFormatter {
   /// A chart axis label, as `Mar 6`.
   static String chartDay(DateTime date) => _chartDay.format(date);
 
+  /// How long ago [moment] was, relative to [now]: `5 minutes ago`.
+  ///
+  /// Takes [now] rather than reading a clock: `DateTime.now()` lives only in
+  /// the injected `Clock`.
+  static String relativeTime(DateTime moment, {required DateTime now}) {
+    final elapsed = now.difference(moment);
+    if (elapsed.inMinutes < 1) return 'just now';
+    if (elapsed.inHours < 1) {
+      return Intl.plural(
+        elapsed.inMinutes,
+        one: '1 minute ago',
+        other: '${elapsed.inMinutes} minutes ago',
+      );
+    }
+    if (elapsed.inDays < 1) {
+      return Intl.plural(
+        elapsed.inHours,
+        one: '1 hour ago',
+        other: '${elapsed.inHours} hours ago',
+      );
+    }
+    return Intl.plural(
+      elapsed.inDays,
+      one: 'yesterday',
+      other: '${elapsed.inDays} days ago',
+    );
+  }
+
   /// A fetch time as `Mar 6, 09:05`.
   static String timestamp(DateTime moment) => _timestamp.format(moment);
 }

@@ -1,3 +1,5 @@
+import 'package:currency_exchange_tracker/core/clock/clock.dart';
+import 'package:currency_exchange_tracker/core/connectivity/connectivity_cubit.dart';
 import 'package:currency_exchange_tracker/core/di/injection.dart';
 import 'package:currency_exchange_tracker/core/navigation/app_routes.dart';
 import 'package:currency_exchange_tracker/core/theme/app_theme.dart';
@@ -21,12 +23,22 @@ class CurrencyExchangeTrackerApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Currency Exchange Tracker',
-      theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
-      initialRoute: AppRoutes.ratesList,
-      onGenerateRoute: _onGenerateRoute,
+    // Connectivity and the clock outlive every route, so they hang above the
+    // navigator. `.value` on purpose: both are app-lifetime singletons and
+    // must not be disposed along with a route.
+    return RepositoryProvider<Clock>.value(
+      value: getIt<Clock>(),
+      child: BlocProvider<ConnectivityCubit>.value(
+        value: getIt<ConnectivityCubit>(),
+        child: MaterialApp(
+          title: 'Currency Exchange Tracker',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.light,
+          darkTheme: AppTheme.dark,
+          initialRoute: AppRoutes.ratesList,
+          onGenerateRoute: _onGenerateRoute,
+        ),
+      ),
     );
   }
 

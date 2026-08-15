@@ -1,3 +1,7 @@
+import 'package:currency_exchange_tracker/core/connectivity/connectivity_cubit.dart';
+import 'package:currency_exchange_tracker/core/connectivity/connectivity_state.dart';
+import 'package:currency_exchange_tracker/core/failures/failure.dart';
+import 'package:currency_exchange_tracker/core/failures/failure_messages.dart';
 import 'package:currency_exchange_tracker/core/navigation/app_routes.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/entities/rate_comparison.dart';
 import 'package:currency_exchange_tracker/features/rates/presentation/blocs/rates_list_bloc.dart';
@@ -8,6 +12,7 @@ import 'package:currency_exchange_tracker/features/rates/presentation/widgets/ra
 import 'package:currency_exchange_tracker/features/rates/presentation/widgets/rates_empty_view.dart';
 import 'package:currency_exchange_tracker/features/rates/presentation/widgets/rates_error_view.dart';
 import 'package:currency_exchange_tracker/features/rates/presentation/widgets/rates_loading_list.dart';
+import 'package:currency_exchange_tracker/features/rates/presentation/widgets/rates_offline_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -20,16 +25,49 @@ class RatesListPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Exchange rates')),
-      body: BlocBuilder<RatesListBloc, RatesListState>(
-        builder: (context, state) => switch (state) {
-          RatesLoadInProgress() => const RatesLoadingList(),
-          RatesLoadSuccess() => _LoadedRates(state: state),
-          RatesLoadEmpty() => RatesEmptyView(onRetry: () => _refresh(context)),
-          RatesLoadFailure() => RatesErrorView(
-            failure: state.failure,
-            onRetry: () => _refresh(context),
+      body: MultiBlocListener(
+        listeners: [
+          BlocListener<RatesListBloc, RatesListState>(
+            // Only the moment a refresh starts failing is news; a failure
+            // that merely persists across rebuilds is not.
+            listenWhen: (previous, current) => switch ((previous, current)) {
+              (
+                RatesLoadSuccess(refreshFailure: null),
+                RatesLoadSuccess(refreshFailure: final Failure _),
+              ) =>
+                true,
+              _ => false,
+            },
+            listener: _showRefreshFailure,
           ),
-        },
+          BlocListener<ConnectivityCubit, ConnectivityState>(
+            // An unresolved verdict is not news; only Online/Offline reach
+            // the bloc, which turns the transition into exactly one refresh.
+            listenWhen: (previous, current) => switch (current) {
+              ConnectivityUnknown() => false,
+              _ => true,
+            },
+            listener: (context, state) => context.read<RatesListBloc>().add(
+              RatesConnectivityChanged(isOnline: state is ConnectivityOnline),
+            ),
+          ),
+        ],
+        child: BlocBuilder<RatesListBloc, RatesListState>(
+          builder: (context, state) => switch (state) {
+            RatesLoadInProgress() => const RatesLoadingList(),
+            RatesLoadSuccess() => _LoadedRates(state: state),
+            RatesLoadEmpty() => RatesEmptyView(
+              onRetry: () => _refresh(context),
+            ),
+            RatesUnavailableOffline() => RatesOfflineView(
+              onRetry: () => _refresh(context),
+            ),
+            RatesLoadFailure() => RatesErrorView(
+              failure: state.failure,
+              onRetry: () => _refresh(context),
+            ),
+          },
+        ),
       ),
     );
   }
@@ -48,6 +86,8 @@ class _LoadedRates extends StatelessWidget {
         LastUpdatedBanner(
           lastUpdated: state.lastUpdated,
           isFromCache: state.isFromCache,
+          isOffline:
+              context.watch<ConnectivityCubit>().state is ConnectivityOffline,
         ),
         Expanded(
           child: RefreshIndicator(
@@ -66,6 +106,20 @@ class _LoadedRates extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Reports a refresh that failed over rates the user can still see.
+///
+/// The copy is the same `Failure` mapping the error screen uses; there is one
+/// place failures become English.
+void _showRefreshFailure(BuildContext context, RatesListState state) {
+  final failure = switch (state) {
+    RatesLoadSuccess(:final refreshFailure?) => refreshFailure,
+    _ => null,
+  };
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(SnackBar(content: Text(failure!.userMessage)));
 }
 
 void _refresh(BuildContext context) =>

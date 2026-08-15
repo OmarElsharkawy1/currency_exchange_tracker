@@ -148,6 +148,157 @@ void main() {
     );
   });
 
+  group('RatesConnectivityChanged', () {
+    blocTest<RatesListBloc, RatesListState>(
+      'refreshes exactly once when connectivity comes back',
+      setUp: () => stubLatest(success(refreshedSnapshot)),
+      build: buildBloc,
+      seed: () => RatesLoadSuccess(
+        rates: rates,
+        lastUpdated: fetchedAt,
+        isFromCache: true,
+      ),
+      act: (bloc) => bloc
+        ..add(const RatesConnectivityChanged(isOnline: false))
+        ..add(const RatesConnectivityChanged(isOnline: true)),
+      verify: (_) {
+        verify(() => repository.getLatestRates(forceRefresh: true)).called(1);
+      },
+    );
+
+    blocTest<RatesListBloc, RatesListState>(
+      'does not skeleton the rates it already has while reconnecting',
+      setUp: () => stubLatest(success(refreshedSnapshot)),
+      build: buildBloc,
+      seed: () => RatesLoadSuccess(
+        rates: rates,
+        lastUpdated: fetchedAt,
+        isFromCache: true,
+      ),
+      act: (bloc) => bloc
+        ..add(const RatesConnectivityChanged(isOnline: false))
+        ..add(const RatesConnectivityChanged(isOnline: true)),
+      expect: () => [
+        RatesLoadSuccess(
+          rates: refreshedSnapshot.rates,
+          lastUpdated: refreshedSnapshot.fetchedAt,
+          isFromCache: false,
+        ),
+      ],
+    );
+
+    blocTest<RatesListBloc, RatesListState>(
+      'going offline alone refreshes nothing',
+      setUp: () => stubLatest(success(snapshot)),
+      build: buildBloc,
+      seed: () => RatesLoadSuccess(
+        rates: rates,
+        lastUpdated: fetchedAt,
+        isFromCache: false,
+      ),
+      act: (bloc) => bloc.add(const RatesConnectivityChanged(isOnline: false)),
+      expect: () => <RatesListState>[],
+      verify: (_) {
+        verifyNever(
+          () => repository.getLatestRates(
+            forceRefresh: any(named: 'forceRefresh'),
+          ),
+        );
+      },
+    );
+
+    blocTest<RatesListBloc, RatesListState>(
+      'staying online refreshes nothing — only a reconnect counts',
+      setUp: () => stubLatest(success(snapshot)),
+      build: buildBloc,
+      seed: () => RatesLoadSuccess(
+        rates: rates,
+        lastUpdated: fetchedAt,
+        isFromCache: false,
+      ),
+      act: (bloc) => bloc
+        ..add(const RatesConnectivityChanged(isOnline: true))
+        ..add(const RatesConnectivityChanged(isOnline: true)),
+      verify: (_) {
+        verifyNever(
+          () => repository.getLatestRates(
+            forceRefresh: any(named: 'forceRefresh'),
+          ),
+        );
+      },
+    );
+
+    blocTest<RatesListBloc, RatesListState>(
+      'each reconnect refreshes once, not once per flap report',
+      setUp: () => stubLatest(success(snapshot)),
+      build: buildBloc,
+      seed: () => RatesLoadSuccess(
+        rates: rates,
+        lastUpdated: fetchedAt,
+        isFromCache: false,
+      ),
+      act: (bloc) {
+        for (final isOnline in [false, true, false, true]) {
+          bloc.add(RatesConnectivityChanged(isOnline: isOnline));
+        }
+      },
+      verify: (_) {
+        verify(() => repository.getLatestRates(forceRefresh: true)).called(2);
+      },
+    );
+  });
+
+  group('offline with nothing cached', () {
+    blocTest<RatesListBloc, RatesListState>(
+      'is its own state, not a generic error',
+      setUp: () => stubLatest(failed(const NetworkFailure())),
+      build: buildBloc,
+      act: (bloc) => bloc
+        ..add(const RatesConnectivityChanged(isOnline: false))
+        ..add(const RatesRequested()),
+      expect: () => [
+        const RatesLoadInProgress(),
+        const RatesUnavailableOffline(),
+      ],
+    );
+
+    blocTest<RatesListBloc, RatesListState>(
+      'is still a plain failure while online',
+      setUp: () => stubLatest(failed(const NetworkFailure())),
+      build: buildBloc,
+      act: (bloc) => bloc.add(const RatesRequested()),
+      expect: () => [
+        const RatesLoadInProgress(),
+        const RatesLoadFailure(failure: NetworkFailure()),
+      ],
+    );
+
+    blocTest<RatesListBloc, RatesListState>(
+      'serves the cache silently when offline at cold start',
+      setUp: () => stubLatest(
+        success(
+          RatesSnapshot(
+            rates: rates,
+            fetchedAt: fetchedAt,
+            isFromCache: true,
+          ),
+        ),
+      ),
+      build: buildBloc,
+      act: (bloc) => bloc
+        ..add(const RatesConnectivityChanged(isOnline: false))
+        ..add(const RatesRequested()),
+      expect: () => [
+        const RatesLoadInProgress(),
+        RatesLoadSuccess(
+          rates: rates,
+          lastUpdated: fetchedAt,
+          isFromCache: true,
+        ),
+      ],
+    );
+  });
+
   group('RatesRefreshed', () {
     blocTest<RatesListBloc, RatesListState>(
       'forces a refresh past the cache',
@@ -179,7 +330,7 @@ void main() {
     );
 
     blocTest<RatesListBloc, RatesListState>(
-      'keeps the rates on screen when a refresh fails',
+      'keeps the rates on screen when a refresh fails, and says it failed',
       setUp: () => stubLatest(failed(const TimeoutFailure())),
       build: buildBloc,
       seed: () => RatesLoadSuccess(
@@ -188,10 +339,85 @@ void main() {
         isFromCache: false,
       ),
       act: (bloc) => bloc.add(const RatesRefreshed()),
-      expect: () => <RatesListState>[],
+      expect: () => [
+        RatesLoadSuccess(
+          rates: rates,
+          lastUpdated: fetchedAt,
+          isFromCache: false,
+          refreshFailure: const TimeoutFailure(),
+        ),
+      ],
+    );
+
+    blocTest<RatesListBloc, RatesListState>(
+      'a failed refresh keeps the very same rates and timestamp',
+      setUp: () => stubLatest(failed(const TimeoutFailure())),
+      build: buildBloc,
+      seed: () => RatesLoadSuccess(
+        rates: rates,
+        lastUpdated: fetchedAt,
+        isFromCache: true,
+      ),
+      act: (bloc) => bloc.add(const RatesRefreshed()),
+      verify: (bloc) {
+        final state = bloc.state as RatesLoadSuccess;
+        expect(identical(state.rates, rates), isTrue);
+        expect(state.lastUpdated, fetchedAt);
+        expect(state.isFromCache, isTrue);
+        expect(state.refreshFailure, const TimeoutFailure());
+      },
+    );
+
+    blocTest<RatesListBloc, RatesListState>(
+      'never falls back to a full-screen error once rates are loaded',
+      setUp: () => stubLatest(failed(const NetworkFailure())),
+      build: buildBloc,
+      seed: () => RatesLoadSuccess(
+        rates: rates,
+        lastUpdated: fetchedAt,
+        isFromCache: false,
+      ),
+      act: (bloc) => bloc.add(const RatesRefreshed()),
       verify: (bloc) {
         expect(bloc.state, isA<RatesLoadSuccess>());
+        expect(bloc.state, isNot(isA<RatesLoadFailure>()));
       },
+    );
+
+    blocTest<RatesListBloc, RatesListState>(
+      'the next successful refresh clears the failure',
+      build: buildBloc,
+      seed: () => RatesLoadSuccess(
+        rates: rates,
+        lastUpdated: fetchedAt,
+        isFromCache: false,
+        refreshFailure: const TimeoutFailure(),
+      ),
+      act: (bloc) {
+        stubLatest(success(refreshedSnapshot));
+        bloc.add(const RatesRefreshed());
+      },
+      expect: () => [
+        RatesLoadSuccess(
+          rates: refreshedSnapshot.rates,
+          lastUpdated: refreshedSnapshot.fetchedAt,
+          isFromCache: false,
+        ),
+      ],
+      verify: (bloc) {
+        expect((bloc.state as RatesLoadSuccess).refreshFailure, isNull);
+      },
+    );
+
+    blocTest<RatesListBloc, RatesListState>(
+      'a cold-start failure is still a full-screen failure',
+      setUp: () => stubLatest(failed(const NetworkFailure())),
+      build: buildBloc,
+      act: (bloc) => bloc.add(const RatesRefreshed()),
+      expect: () => [
+        const RatesLoadInProgress(),
+        const RatesLoadFailure(failure: NetworkFailure()),
+      ],
     );
 
     blocTest<RatesListBloc, RatesListState>(

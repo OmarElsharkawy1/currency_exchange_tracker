@@ -32,6 +32,18 @@ The API quotes EGP → foreign (`egp.usd = 0.019227`); the UI shows foreign → 
 display rate means the pound buys less, so it is rendered as the pound
 *weakening*.
 
+## Connectivity
+
+`connectivity_plus` reports the radio only — airport wifi with no route still
+reports `wifi` — so `ConnectivityCubit` merges it with a reachability probe and
+debounces the result by 2 seconds, giving exactly one auto-refresh per
+reconnect. The probe is pointed at the currency API itself rather than the
+checker's default third-party hosts, and it probes both mirrors, so **"online"
+here means "at least one mirror the data source can actually use answered a
+HEAD request", not "some DNS somewhere resolved"** — a network that blocks the
+API reads as offline, and one that blocks only jsDelivr still reads as online
+because the host-fallback interceptor can serve from `pages.dev`.
+
 ## Cache
 
 `hive_ce`, JSON strings, no adapters:

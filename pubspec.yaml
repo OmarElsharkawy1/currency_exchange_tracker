@@ -28,6 +28,7 @@ environment:
 # the latest version available on pub.dev. To see which dependencies have newer
 # versions available, run `flutter pub outdated`.
 dependencies:
+  connectivity_plus: ^7.3.1
   dio: ^5.11.0
   equatable: ^2.1.0
   fl_chart: ^1.2.0
@@ -37,6 +38,7 @@ dependencies:
   get_it: ^9.2.1
   hive_ce: ^2.19.3
   hive_ce_flutter: ^2.3.4
+  internet_connection_checker_plus: ^3.1.1
   intl: ^0.20.3
   skeletonizer: ^2.1.3
 
