@@ -39,6 +39,10 @@ abstract final class RateFormatter {
 
   static final DateFormat _timestamp = DateFormat('MMM d, HH:mm');
 
+  static final DateFormat _rateDate = DateFormat('MMM d, y');
+
+  static final DateFormat _chartDay = DateFormat('MMM d');
+
   /// The rate as the UI states it: `1 USD = 52.01 EGP`.
   static String rateSentence(String currencyCode, double displayRate) =>
       '1 $currencyCode = ${_rate.format(displayRate)} EGP';
@@ -64,6 +68,12 @@ abstract final class RateFormatter {
   /// Movement as a percentage without its sign, for screen readers.
   static String absolutePercent(double percentChange) =>
       _absolutePercent.format(percentChange.abs());
+
+  /// The day a rate belongs to, as `Mar 6, 2024`.
+  static String rateDate(DateTime date) => _rateDate.format(date);
+
+  /// A chart axis label, as `Mar 6`.
+  static String chartDay(DateTime date) => _chartDay.format(date);
 
   /// A fetch time as `Mar 6, 09:05`.
   static String timestamp(DateTime moment) => _timestamp.format(moment);

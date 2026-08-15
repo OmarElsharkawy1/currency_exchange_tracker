@@ -176,3 +176,15 @@ Bloc + sealed event/state families, a page whose body is one exhaustive switch, 
 # Follow-ups:
 
 None issued yet.
+
+# 2026-08-15 — Phase 4: Detail screen & 7-day chart
+
+Prompt: Build CurrencyDetailBloc + detail screen. Route contract: the list passes the ExchangeRate entity (plus previous-day data) through the route; the detail screen renders current rate, change, direction color and last-update date immediately from that entity — no fetch, no loading state for it. The bloc fetches only the 7-day history via getHistory, anchored per CLAUDE.md. Chart: fl_chart line chart, gradient fill, animates on data arrival; Robinhood-style touch-scrub showing the touched point's value + date in the header and reverting on release; Skeletonizer shimmer while history loads — chart-shaped skeleton, not a box; history failure → friendly message + retry while the header rate stays visible. Hero on the currency code/flag between list row and detail header. bloc_test for history transitions.
+
+Output: Detail bloc + sealed event/state families documented as covering the chart only, a stateful page holding scrub state, header, chart, and a chart-shaped skeleton. Chart plots displayRate with curved line, gradient fill and a 450ms ease-out on data arrival; scrub reports the touched day upward and the header swaps to its value + date, reverting on release. Named routes added (AppRoutes + onGenerateRoute), so the composition root is the only place touching getIt; Hero on the currency code both ends. 207 tests green (9 bloc, 17 detail widget, 1 new route-contract test), analyzer clean, format clean. Five decisions flagged.
+
+Verdict: Accepted
+
+Why: [draft] The route contract is enforced by tests, not just implemented: the header renders the rate while state is HistoryLoadInProgress, is asserted to sit outside the skeletonized subtree, and survives HistoryLoadFailure with the retry beside it — so "no loading state for the header" can't silently regress. A chart test pins spots.last.y ≈ 52.36, meaning a raw-quote regression fails loudly rather than rendering a plausible wrong line, which is the same inversion trap CLAUDE.md flags as highest-risk. Widget-layer rules held: scrub state resolves through pattern switches (switch (scrubbedPoint) { null => …, final point => … }), never an if or a ??, and colors still key only off direction. Two duplications got caught and removed rather than shipped: the header printed the currency name the AppBar already showed, and the bloc re-declared a 7 the repository contract already owned.
+
+Follow-ups: None issued yet.

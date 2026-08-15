@@ -2,6 +2,7 @@ import 'package:currency_exchange_tracker/core/extensions/context_extensions.dar
 import 'package:currency_exchange_tracker/core/formatting/rate_formatter.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/entities/rate_comparison.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/entities/rate_direction.dart';
+import 'package:currency_exchange_tracker/features/rates/presentation/pages/currency_detail_page.dart';
 import 'package:flutter/material.dart';
 
 /// One currency's row in the rates list.
@@ -52,10 +53,16 @@ class _CurrencyIdentity extends StatelessWidget {
           style: context.textStyles.titleMedium,
         ),
         const SizedBox(height: 2),
-        Text(
-          comparison.currency.code,
-          style: context.textStyles.bodySmall?.copyWith(
-            color: context.colors.onSurfaceVariant,
+        Hero(
+          tag: CurrencyDetailPage.heroTagFor(comparison.currency),
+          child: Material(
+            type: MaterialType.transparency,
+            child: Text(
+              comparison.currency.code,
+              style: context.textStyles.bodySmall?.copyWith(
+                color: context.colors.onSurfaceVariant,
+              ),
+            ),
           ),
         ),
       ],

@@ -1,3 +1,5 @@
+import 'package:currency_exchange_tracker/core/navigation/app_routes.dart';
+import 'package:currency_exchange_tracker/features/rates/domain/entities/rate_comparison.dart';
 import 'package:currency_exchange_tracker/features/rates/presentation/blocs/rates_list_bloc.dart';
 import 'package:currency_exchange_tracker/features/rates/presentation/blocs/rates_list_event.dart';
 import 'package:currency_exchange_tracker/features/rates/presentation/blocs/rates_list_state.dart';
@@ -54,8 +56,10 @@ class _LoadedRates extends StatelessWidget {
               physics: const AlwaysScrollableScrollPhysics(),
               itemCount: state.rates.length,
               separatorBuilder: (_, _) => const Divider(height: 1),
-              itemBuilder: (context, index) =>
-                  RateRow(comparison: state.rates[index]),
+              itemBuilder: (context, index) => InkWell(
+                onTap: () => _openDetail(context, state.rates[index]),
+                child: RateRow(comparison: state.rates[index]),
+              ),
             ),
           ),
         ),
@@ -66,3 +70,9 @@ class _LoadedRates extends StatelessWidget {
 
 void _refresh(BuildContext context) =>
     context.read<RatesListBloc>().add(const RatesRefreshed());
+
+void _openDetail(BuildContext context, RateComparison comparison) =>
+    Navigator.of(context).pushNamed(
+      AppRoutes.currencyDetail,
+      arguments: comparison,
+    );

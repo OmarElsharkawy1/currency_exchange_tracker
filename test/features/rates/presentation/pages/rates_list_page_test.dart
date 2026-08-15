@@ -1,5 +1,6 @@
 import 'package:bloc_test/bloc_test.dart';
 import 'package:currency_exchange_tracker/core/failures/failures.dart';
+import 'package:currency_exchange_tracker/core/navigation/app_routes.dart';
 import 'package:currency_exchange_tracker/core/theme/app_theme.dart';
 import 'package:currency_exchange_tracker/core/theme/trend_colors.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/entities/currency.dart';
@@ -249,6 +250,43 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
 
       verify(() => bloc.add(const RatesRefreshed())).called(1);
+    });
+  });
+
+  group('the route contract', () {
+    testWidgets('tapping a row hands the entity to the detail route', (
+      tester,
+    ) async {
+      final pushed = <RouteSettings>[];
+      bloc = MockRatesListBloc();
+      when(() => bloc.state).thenReturn(
+        RatesLoadSuccess(
+          rates: [weakeningUsd],
+          lastUpdated: lastUpdated,
+          isFromCache: false,
+        ),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          onGenerateRoute: (settings) {
+            pushed.add(settings);
+            return MaterialPageRoute<void>(
+              settings: settings,
+              builder: (_) => BlocProvider<RatesListBloc>.value(
+                value: bloc,
+                child: const RatesListPage(),
+              ),
+            );
+          },
+        ),
+      );
+
+      await tester.tap(find.text('US Dollar'));
+      await tester.pumpAndSettle();
+
+      expect(pushed.last.name, AppRoutes.currencyDetail);
+      expect(pushed.last.arguments, weakeningUsd);
     });
   });
 

@@ -65,6 +65,18 @@ void main() {
     });
   });
 
+  group('rateDate', () {
+    test('names the day a rate belongs to', () {
+      expect(RateFormatter.rateDate(DateTime.utc(2024, 3, 6)), 'Mar 6, 2024');
+    });
+  });
+
+  group('chartDay', () {
+    test('is short enough for an axis label', () {
+      expect(RateFormatter.chartDay(DateTime.utc(2024, 3, 6)), 'Mar 6');
+    });
+  });
+
   group('timestamp', () {
     test('formats a date and time of day', () {
       expect(
