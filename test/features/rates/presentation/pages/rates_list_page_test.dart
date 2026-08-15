@@ -15,7 +15,10 @@ import 'package:currency_exchange_tracker/features/rates/presentation/blocs/rate
 import 'package:currency_exchange_tracker/features/rates/presentation/blocs/rates_list_event.dart';
 import 'package:currency_exchange_tracker/features/rates/presentation/blocs/rates_list_state.dart';
 import 'package:currency_exchange_tracker/features/rates/presentation/pages/rates_list_page.dart';
+import 'package:currency_exchange_tracker/features/rates/presentation/widgets/rate_row.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -66,6 +69,9 @@ final RateComparison strengtheningEur = comparison(
 
 final lastUpdated = DateTime(2024, 3, 6, 9, 5);
 
+/// Longer than any entrance, stagger or value roll on this screen.
+const Duration settleMotion = Duration(milliseconds: 600);
+
 void main() {
   setUpAll(() {
     registerFallbackValue(const RatesRequested());
@@ -85,18 +91,24 @@ void main() {
 
   tearDown(() => themeMode.dispose());
 
-  Widget wrap(Widget child) => MaterialApp(
+  Widget wrap(
+    Widget child, {
+    TextDirection textDirection = TextDirection.ltr,
+  }) => MaterialApp(
     theme: AppTheme.light,
-    home: ThemeModeScope(
-      controller: themeMode,
-      child: RepositoryProvider<Clock>.value(
-        value: clock,
-        child: MultiBlocProvider(
-          providers: [
-            BlocProvider<RatesListBloc>.value(value: bloc),
-            BlocProvider<ConnectivityCubit>.value(value: connectivity),
-          ],
-          child: child,
+    home: Directionality(
+      textDirection: textDirection,
+      child: ThemeModeScope(
+        controller: themeMode,
+        child: RepositoryProvider<Clock>.value(
+          value: clock,
+          child: MultiBlocProvider(
+            providers: [
+              BlocProvider<RatesListBloc>.value(value: bloc),
+              BlocProvider<ConnectivityCubit>.value(value: connectivity),
+            ],
+            child: child,
+          ),
         ),
       ),
     ),
@@ -111,6 +123,13 @@ void main() {
     when(() => bloc.state).thenReturn(state);
     when(() => connectivity.state).thenReturn(connectivityState);
     await tester.pumpWidget(wrap(const RatesListPage()));
+    // Past the staggered entrance and the rolling numbers, so assertions see
+    // settled values rather than a frame mid-animation. Several pumps, not
+    // one long one: a single jump can land on the frame where a row is still
+    // fully transparent, which has no semantics node at all.
+    for (var frame = 0; frame < 3; frame++) {
+      await tester.pump(settleMotion);
+    }
   }
 
   group('while loading', () {
@@ -189,6 +208,7 @@ void main() {
     });
 
     testWidgets('labels each row for a screen reader', (tester) async {
+      final handle = SemanticsBinding.instance.ensureSemantics();
       await pumpPage(
         tester,
         RatesLoadSuccess(
@@ -198,16 +218,18 @@ void main() {
         ),
       );
 
+      final row = tester.getSemantics(find.byType(RateRow));
+      expect(row.label, 'US Dollar, 52.36 Egyptian pounds, up 0.66 percent');
       expect(
-        find.bySemanticsLabel(
-          'US Dollar, 52.36 Egyptian pounds, up 0.66 '
-          'percent',
-        ),
-        findsOneWidget,
+        row.flagsCollection.isButton,
+        isTrue,
+        reason: 'a row opens the detail screen, so it announces as a button',
       );
+      handle.dispose();
     });
 
     testWidgets('says unchanged when there is no previous day', (tester) async {
+      final handle = SemanticsBinding.instance.ensureSemantics();
       await pumpPage(
         tester,
         RatesLoadSuccess(
@@ -218,9 +240,10 @@ void main() {
       );
 
       expect(
-        find.bySemanticsLabel('US Dollar, 52.36 Egyptian pounds, unchanged'),
-        findsOneWidget,
+        tester.getSemantics(find.byType(RateRow)).label,
+        'US Dollar, 52.36 Egyptian pounds, unchanged',
       );
+      handle.dispose();
     });
 
     testWidgets('renders one row per currency', (tester) async {
@@ -312,7 +335,7 @@ void main() {
       when(() => connectivity.state).thenReturn(const ConnectivityOnline());
 
       await tester.pumpWidget(wrap(const RatesListPage()));
-      await tester.pump();
+      await tester.pump(settleMotion);
 
       expect(find.byType(SnackBar), findsOneWidget);
       expect(find.textContaining('took too long'), findsOneWidget);
@@ -327,7 +350,7 @@ void main() {
       when(() => connectivity.state).thenReturn(const ConnectivityOnline());
 
       await tester.pumpWidget(wrap(const RatesListPage()));
-      await tester.pump();
+      await tester.pump(settleMotion);
 
       expect(find.text('1 USD = 52.36 EGP'), findsOneWidget);
       expect(find.text('Retry'), findsNothing);
@@ -342,7 +365,7 @@ void main() {
       when(() => connectivity.state).thenReturn(const ConnectivityOnline());
 
       await tester.pumpWidget(wrap(const RatesListPage()));
-      await tester.pump();
+      await tester.pump(settleMotion);
 
       expect(find.byType(SnackBar), findsNothing);
     });
@@ -363,9 +386,94 @@ void main() {
       when(() => connectivity.state).thenReturn(const ConnectivityOnline());
 
       await tester.pumpWidget(wrap(const RatesListPage()));
-      await tester.pump();
+      await tester.pump(settleMotion);
 
       expect(find.byType(SnackBar), findsOneWidget);
+    });
+  });
+
+  group('right to left', () {
+    final loaded = RatesLoadSuccess(
+      rates: [weakeningUsd, strengtheningEur],
+      lastUpdated: lastUpdated,
+      isFromCache: false,
+    );
+
+    Future<void> pumpRtl(WidgetTester tester) async {
+      bloc = MockRatesListBloc();
+      when(() => bloc.state).thenReturn(loaded);
+      when(() => connectivity.state).thenReturn(const ConnectivityOnline());
+      await tester.pumpWidget(
+        wrap(const RatesListPage(), textDirection: TextDirection.rtl),
+      );
+      for (var frame = 0; frame < 3; frame++) {
+        await tester.pump(settleMotion);
+      }
+    }
+
+    testWidgets('lays the rows out mirrored', (tester) async {
+      await pumpRtl(tester);
+
+      expect(
+        Directionality.of(tester.element(find.byType(RateRow).first)),
+        TextDirection.rtl,
+      );
+
+      // Identity starts at the right edge, the rate at the left.
+      final name = tester.getRect(find.text('US Dollar'));
+      final rate = tester.getRect(find.text('1 USD = 52.36 EGP'));
+      expect(name.right, greaterThan(rate.right));
+    });
+
+    testWidgets('keeps every row on screen', (tester) async {
+      await pumpRtl(tester);
+
+      final screen = tester.getRect(find.byType(RatesListPage));
+      for (final label in ['US Dollar', 'Euro']) {
+        final rect = tester.getRect(find.text(label));
+        expect(rect.left, greaterThanOrEqualTo(screen.left));
+        expect(rect.right, lessThanOrEqualTo(screen.right));
+      }
+    });
+
+    testWidgets('reads the same phrasing to a screen reader', (tester) async {
+      final handle = SemanticsBinding.instance.ensureSemantics();
+      await pumpRtl(tester);
+
+      expect(
+        tester.getSemantics(find.byType(RateRow).first).label,
+        'US Dollar, 52.36 Egyptian pounds, up 0.66 percent',
+      );
+      handle.dispose();
+    });
+  });
+
+  group('reduced motion', () {
+    testWidgets('skips the entrance when the platform asks it to', (
+      tester,
+    ) async {
+      bloc = MockRatesListBloc();
+      when(() => bloc.state).thenReturn(
+        RatesLoadSuccess(
+          rates: [weakeningUsd],
+          lastUpdated: lastUpdated,
+          isFromCache: false,
+        ),
+      );
+      when(() => connectivity.state).thenReturn(const ConnectivityOnline());
+
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(disableAnimations: true),
+          child: wrap(const RatesListPage()),
+        ),
+      );
+      // One frame only: with the entrance skipped there is nothing to settle,
+      // and the row is readable straight away.
+      await tester.pump();
+
+      expect(find.text('US Dollar'), findsOneWidget);
+      expect(find.byType(Animate), findsNothing);
     });
   });
 
@@ -480,7 +588,7 @@ void main() {
       when(() => bloc.state).thenReturn(loaded);
 
       await tester.pumpWidget(wrap(const RatesListPage()));
-      await tester.pump();
+      await tester.pump(settleMotion);
 
       verify(
         () => bloc.add(const RatesConnectivityChanged(isOnline: false)),
@@ -501,7 +609,7 @@ void main() {
       when(() => bloc.state).thenReturn(loaded);
 
       await tester.pumpWidget(wrap(const RatesListPage()));
-      await tester.pump();
+      await tester.pump(settleMotion);
 
       verifyNever(() => bloc.add(any(that: isA<RatesConnectivityChanged>())));
     });

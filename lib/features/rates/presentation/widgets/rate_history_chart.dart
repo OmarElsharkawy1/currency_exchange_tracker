@@ -1,5 +1,6 @@
 import 'package:currency_exchange_tracker/core/extensions/context_extensions.dart';
 import 'package:currency_exchange_tracker/core/formatting/rate_formatter.dart';
+import 'package:currency_exchange_tracker/core/theme/app_motion.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/entities/rate_direction.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/entities/rate_history.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -44,6 +45,12 @@ class RateHistoryChart extends StatelessWidget {
   /// How far from a dot a touch still counts as that dot.
   static const double touchThreshold = 24;
 
+  /// Vertical space the date row occupies under the plot.
+  ///
+  /// Shared with the skeleton so the placeholder and the real chart reserve
+  /// the same room and the layout does not shift when history arrives.
+  static const double axisLabelHeight = 28;
+
   @override
   Widget build(BuildContext context) {
     final lineColor = context.colors.primary;
@@ -56,8 +63,8 @@ class RateHistoryChart extends StatelessWidget {
       excludeSemantics: true,
       label: _semanticsLabel,
       child: LineChart(
-        duration: const Duration(milliseconds: 450),
-        curve: Curves.easeOutCubic,
+        duration: AppMotion.chart,
+        curve: AppMotion.curve,
         LineChartData(
           minY: bounds.min,
           maxY: bounds.max,
@@ -76,7 +83,7 @@ class RateHistoryChart extends StatelessWidget {
                 showTitles: true,
                 // Every plotted day gets a label.
                 interval: 1,
-                reservedSize: 28,
+                reservedSize: axisLabelHeight,
                 getTitlesWidget: (value, meta) =>
                     _DayLabel(meta: meta, label: _labelAt(value.toInt())),
               ),

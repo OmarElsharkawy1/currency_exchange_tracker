@@ -267,3 +267,23 @@ Follow-ups: Three issued, all closed.
 Consolidate the duplicated screen-reader phrasing (list-screen exclusion lifted) — one function, both call sites, two widget tests pumping the list row and the detail header with the same day and asserting identical bySemanticsLabel.
 Change the walk-back policy so a weekend spans more calendar days rather than dropping dots — "last 7 published rates, not last 7 calendar days", bounded at 7 extra days then RateUnavailableFailure, documented in the README. Today being Saturday was the concrete trigger; a reviewer opening the app would have seen 5–6 points.
 Move rate_semantics.dart out of core/ and record the layering grep.
+
+# 2026-08-15 — Polish pass: motion, RTL, semantics, contrast
+
+Prompt: No logic changes. Staggered list entrance via flutter_animate; TweenAnimationBuilder rolling the rate numbers old→new on refresh; refined skeleton layouts matching the loaded layout exactly; an RTL audit run under Directionality.rtl fixing any EdgeInsets/left/right leftovers; a semantics audit against TalkBack/VoiceOver phrasing; a dark-theme audit for TrendColors contrast. Every animation ≤400ms, curves consistent. Where flash and clarity conflict, pick clarity and note it.
+
+Output: AppMotion as the single motion vocabulary — one curve, four durations, all ≤400ms, and no milliseconds: literal left anywhere else in lib/. Staggered row entrance keyed by currency, a RollingRate widget that starts on its real figure rather than rolling up from zero, and a chart skeleton reserving the same axis constant the real chart uses. Three audits run as measurements rather than inspections: contrast computed numerically, semantics dumped from the live tree, RTL exercised under Directionality. 343 tests green, analyzer clean, format clean, all five phase-7 greps zero.
+
+Verdict: Accepted
+
+Why: [draft] Each audit was run as a measurement, and each one returned something other than what the brief predicted.
+
+The contrast audit failed on the light theme, not the dark one. Dark measured 10.60 and 6.68 against its surface — never in question. Light green measured 4.37, under the 4.5 AA floor for body text, and was darkened to clear at 5.16. Had this been a visual inspection rather than a computation, the pass would have concluded "dark looks fine" and shipped the failing theme. My own first "distinguishable" assertion then used the wrong instrument — contrast ratio measures luminance, so a red and a green can match on it while being obviously different — and was replaced with hue separation plus a note that colour is never the sole signal.
+
+The semantics dump found rows announcing without an isButton flag — a screen reader would read the rate and give no indication the row opens anything. The first fix wrapped the row in MergeSemantics, which worked in the tree but made the assertion unreachable, so the flag moved onto RateRow itself and the merge disappeared: one node by construction rather than two stitched together.
+
+The animation removed rows from the semantics tree. The dump showed no row nodes at all mid-fade — Flutter drops semantics for fully transparent subtrees. It resolves in 260ms, so it would never have been caught by looking at the screen. The fix respects MediaQuery.disableAnimationsOf, which is the right answer for a reduce-motion user regardless.
+
+The explicit clarity-over-flash calls: numbers roll on refresh only, never during a chart scrub, because rolling would lag the finger and display intermediate values that were never that day's rate; and RollingRate omits its tween begin so a first paint shows the real figure instead of counting up from zero.
+
+Follow-ups: None issued.

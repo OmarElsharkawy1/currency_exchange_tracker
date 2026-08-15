@@ -105,6 +105,8 @@ void main() {
     for (var pump = 0; pump < 5; pump++) {
       await tester.pump();
     }
+    // Past the row entrance animations, which otherwise leave timers pending.
+    await tester.pump(const Duration(milliseconds: 600));
   }
 
   Future<void> pumpPage(WidgetTester tester) async {

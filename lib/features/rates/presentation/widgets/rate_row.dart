@@ -5,6 +5,7 @@ import 'package:currency_exchange_tracker/features/rates/domain/entities/rate_di
 import 'package:currency_exchange_tracker/features/rates/domain/entities/rate_history_point.dart';
 import 'package:currency_exchange_tracker/features/rates/presentation/formatting/rate_semantics.dart';
 import 'package:currency_exchange_tracker/features/rates/presentation/pages/currency_detail_page.dart';
+import 'package:currency_exchange_tracker/features/rates/presentation/widgets/rolling_rate.dart';
 import 'package:flutter/material.dart';
 
 /// One currency's row in the rates list.
@@ -13,14 +14,26 @@ import 'package:flutter/material.dart';
 /// formats and paints.
 class RateRow extends StatelessWidget {
   /// Creates a row for [comparison].
-  const RateRow({required this.comparison, super.key});
+  const RateRow({
+    required this.comparison,
+    this.isInteractive = false,
+    super.key,
+  });
 
   /// The rate and its movement.
   final RateComparison comparison;
 
+  /// Whether this row can be opened.
+  ///
+  /// Carried here rather than wrapped around the row, so the phrasing and the
+  /// "button" flag land on one semantics node: split across two, a screen
+  /// reader stops twice on the same row.
+  final bool isInteractive;
+
   @override
   Widget build(BuildContext context) {
     return Semantics(
+      button: isInteractive,
       label: RateSemantics.describe(_pointOf(comparison)),
       excludeSemantics: true,
       child: Padding(
@@ -83,11 +96,9 @@ class _RateMovement extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        Text(
-          RateFormatter.rateSentence(
-            comparison.currency.code,
-            comparison.displayRate,
-          ),
+        RollingRate(
+          currencyCode: comparison.currency.code,
+          displayRate: comparison.displayRate,
           style: context.textStyles.titleMedium,
         ),
         const SizedBox(height: 2),

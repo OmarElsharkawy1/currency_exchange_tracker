@@ -1,3 +1,5 @@
+import 'package:currency_exchange_tracker/core/theme/app_spacing.dart';
+import 'package:currency_exchange_tracker/features/rates/presentation/widgets/rate_history_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:skeletonizer/skeletonizer.dart';
 
@@ -42,8 +44,13 @@ class RateHistoryChartSkeleton extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 8),
-          const _AxisLabels(),
+          // The loaded chart reserves this much for its date row; the
+          // skeleton reserves the same, so nothing shifts when it resolves.
+          const SizedBox(height: AppSpacing.sectionGap),
+          const SizedBox(
+            height: RateHistoryChart.axisLabelHeight,
+            child: _AxisLabels(),
+          ),
         ],
       ),
     );

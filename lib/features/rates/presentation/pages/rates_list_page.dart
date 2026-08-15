@@ -3,6 +3,7 @@ import 'package:currency_exchange_tracker/core/connectivity/connectivity_state.d
 import 'package:currency_exchange_tracker/core/failures/failure.dart';
 import 'package:currency_exchange_tracker/core/failures/failure_messages.dart';
 import 'package:currency_exchange_tracker/core/navigation/app_routes.dart';
+import 'package:currency_exchange_tracker/core/theme/app_motion.dart';
 import 'package:currency_exchange_tracker/core/theme/theme_mode_button.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/entities/rate_comparison.dart';
 import 'package:currency_exchange_tracker/features/rates/presentation/blocs/rates_list_bloc.dart';
@@ -15,6 +16,7 @@ import 'package:currency_exchange_tracker/features/rates/presentation/widgets/ra
 import 'package:currency_exchange_tracker/features/rates/presentation/widgets/rates_loading_list.dart';
 import 'package:currency_exchange_tracker/features/rates/presentation/widgets/rates_offline_view.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 /// The rates list screen: five currencies against the Egyptian pound.
@@ -100,9 +102,9 @@ class _LoadedRates extends StatelessWidget {
               physics: const AlwaysScrollableScrollPhysics(),
               itemCount: state.rates.length,
               separatorBuilder: (_, _) => const Divider(height: 1),
-              itemBuilder: (context, index) => InkWell(
-                onTap: () => _openDetail(context, state.rates[index]),
-                child: RateRow(comparison: state.rates[index]),
+              itemBuilder: (context, index) => _RatesListRow(
+                comparison: state.rates[index],
+                position: index,
               ),
             ),
           ),
@@ -124,6 +126,45 @@ void _showRefreshFailure(BuildContext context, RatesListState state) {
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
     ..showSnackBar(SnackBar(content: Text(failure!.userMessage)));
+}
+
+/// One row of the list: the rate, its tap target, and its entrance.
+class _RatesListRow extends StatelessWidget {
+  const _RatesListRow({required this.comparison, required this.position});
+
+  /// The day this row shows.
+  final RateComparison comparison;
+
+  /// Where the row sits in the list, which sets its entrance delay.
+  final int position;
+
+  @override
+  Widget build(BuildContext context) {
+    final row = InkWell(
+      onTap: () => _openDetail(context, comparison),
+      // The row owns its own semantics, button flag included.
+      child: RateRow(comparison: comparison, isInteractive: true),
+    );
+
+    // A row is invisible to a screen reader while it is fully transparent,
+    // and someone who asked the system to reduce motion has no use for an
+    // entrance anyway. Honour the setting and skip straight to the content.
+    if (MediaQuery.disableAnimationsOf(context)) return row;
+
+    return row
+        .animate(
+          // Keyed by currency: the entrance belongs to the row, so a refresh
+          // updates the numbers in place instead of replaying the list.
+          key: ValueKey(comparison.currency),
+          delay: AppMotion.stagger * position,
+        )
+        .fadeIn(duration: AppMotion.entrance, curve: AppMotion.curve)
+        .slideY(
+          begin: 0.12,
+          duration: AppMotion.entrance,
+          curve: AppMotion.curve,
+        );
+  }
 }
 
 void _refresh(BuildContext context) =>
