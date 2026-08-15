@@ -4,6 +4,7 @@ import 'package:currency_exchange_tracker/features/rates/data/data_sources/rates
 import 'package:currency_exchange_tracker/features/rates/data/data_sources/rates_remote_data_source.dart';
 import 'package:currency_exchange_tracker/features/rates/data/repositories/rates_repository_impl.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/repositories/rates_repository.dart';
+import 'package:currency_exchange_tracker/features/rates/presentation/blocs/rates_list_bloc.dart';
 import 'package:dio/dio.dart';
 import 'package:get_it/get_it.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
@@ -49,5 +50,8 @@ Future<void> configureDependencies() async {
         localDataSource: getIt<RatesLocalDataSource>(),
         clock: getIt<Clock>(),
       ),
+    )
+    ..registerFactory<RatesListBloc>(
+      () => RatesListBloc(repository: getIt<RatesRepository>()),
     );
 }
