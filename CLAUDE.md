@@ -77,6 +77,13 @@ The UI displays foreign→EGP (`1 USD = 52.01 EGP`), i.e. the **inverted** value
   max 3 extra steps per data point, then surface `RateUnavailableFailure`.
 - `DateTime.now()` is banned everywhere except inside the injected `Clock`
   implementation in `core/`. Everything time-dependent takes a `Clock`.
+- `Timer` is banned on the same terms as `DateTime.now()`: `SystemClock` is the only
+  timer source in the app. `Clock.ticks(period)` schedules repeating work and
+  `Clock.after(delay, action)` schedules one-shot work — debounces included.
+  Nowhere else, `core/` included, may construct a `Timer`.
+- Callers cancel what they schedule: a widget holding a tick subscription cancels it
+  in `dispose`. A bloc may not tick at all — no bloc state changes because time
+  passed.
 - `DateTime.toApiDate()` extension for `YYYY-MM-DD` formatting lives in `core/`.
 
 ## Network

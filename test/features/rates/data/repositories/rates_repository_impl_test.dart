@@ -1,4 +1,3 @@
-import 'package:currency_exchange_tracker/core/clock/clock.dart';
 import 'package:currency_exchange_tracker/core/failures/failures.dart';
 import 'package:currency_exchange_tracker/features/rates/data/data_sources/rates_local_data_source.dart';
 import 'package:currency_exchange_tracker/features/rates/data/data_sources/rates_remote_data_source.dart';
@@ -9,19 +8,11 @@ import 'package:currency_exchange_tracker/features/rates/domain/entities/rate_di
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
+import '../../../../support/fake_clock.dart';
+
 class MockRatesRemoteDataSource extends Mock implements RatesRemoteDataSource {}
 
 class MockRatesLocalDataSource extends Mock implements RatesLocalDataSource {}
-
-/// A clock that only moves when a test moves it.
-class FakeClock implements Clock {
-  FakeClock(this.instant);
-
-  DateTime instant;
-
-  @override
-  DateTime now() => instant;
-}
 
 RatesResponseDto dtoFor(DateTime date, {double usd = 0.02}) =>
     RatesResponseDto.fromJson(<String, dynamic>{
@@ -165,6 +156,76 @@ void main() {
         expect(failure, const TimeoutFailure());
       },
     );
+  });
+
+  group('getLatestRates — offline paths', () {
+    test(
+      'cold start offline serves the cache and says where it came from',
+      () async {
+        // Nothing fresh, no network: the cache is the whole answer.
+        cacheLatest(latestDto, age: const Duration(days: 2));
+        when(
+          () => remote.fetchLatest(),
+        ).thenAnswer((_) async => failed(const NetworkFailure()));
+        when(
+          () => local.readForDate(DateTime.utc(2024, 3, 5)),
+        ).thenAnswer((_) async => success(yesterdayDto));
+
+        final (snapshot, failure) = await repository.getLatestRates();
+
+        expect(failure, isNull);
+        expect(snapshot!.isFromCache, isTrue);
+        expect(snapshot.rates.first.hasPrevious, isTrue);
+        expect(
+          snapshot.fetchedAt,
+          clock.instant.subtract(const Duration(days: 2)),
+        );
+      },
+    );
+
+    test(
+      'offline with an empty cache surfaces the failure, not empty rates',
+      () async {
+        when(
+          () => remote.fetchLatest(),
+        ).thenAnswer((_) async => failed(const NetworkFailure()));
+
+        final (snapshot, failure) = await repository.getLatestRates();
+
+        expect(snapshot, isNull);
+        expect(failure, const NetworkFailure());
+      },
+    );
+
+    test(
+      'offline still shows rates when only the previous day is missing',
+      () async {
+        cacheLatest(latestDto, age: const Duration(hours: 3));
+        when(
+          () => remote.fetchLatest(),
+        ).thenAnswer((_) async => failed(const NetworkFailure()));
+
+        final (snapshot, failure) = await repository.getLatestRates();
+
+        expect(failure, isNull);
+        expect(snapshot!.rates.first.hasPrevious, isFalse);
+        expect(snapshot.rates.first.change, 0);
+      },
+    );
+
+    test('a forced refresh offline falls back rather than failing', () async {
+      cacheLatest(latestDto, age: const Duration(minutes: 1));
+      when(
+        () => remote.fetchLatest(),
+      ).thenAnswer((_) async => failed(const TimeoutFailure()));
+
+      final (snapshot, failure) = await repository.getLatestRates(
+        forceRefresh: true,
+      );
+
+      expect(failure, isNull);
+      expect(snapshot!.isFromCache, isTrue);
+    });
   });
 
   group('getLatestRates — previous day', () {
