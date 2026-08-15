@@ -19,8 +19,12 @@ final class TrendColors extends ThemeExtension<TrendColors> {
   final Color weakening;
 
   /// Trend colors for the light theme.
+  ///
+  /// The green is darker than a stock "success" green on purpose: the lighter
+  /// shade measured 4.37:1 against the light surface, under the 4.5:1 WCAG AA
+  /// floor for body text. This one clears it at 5.16:1.
   static const TrendColors light = TrendColors(
-    strengthening: Color(0xFF1B873B),
+    strengthening: Color(0xFF177A35),
     weakening: Color(0xFFC62828),
   );
 
