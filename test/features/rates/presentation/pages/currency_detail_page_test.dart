@@ -9,6 +9,8 @@ import 'package:currency_exchange_tracker/core/theme/trend_colors.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/entities/currency.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/entities/exchange_rate.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/entities/rate_comparison.dart';
+import 'package:currency_exchange_tracker/features/rates/domain/entities/rate_history.dart';
+import 'package:currency_exchange_tracker/features/rates/domain/entities/rate_history_point.dart';
 import 'package:currency_exchange_tracker/features/rates/presentation/blocs/currency_detail_bloc.dart';
 import 'package:currency_exchange_tracker/features/rates/presentation/blocs/currency_detail_event.dart';
 import 'package:currency_exchange_tracker/features/rates/presentation/blocs/currency_detail_state.dart';
@@ -16,6 +18,7 @@ import 'package:currency_exchange_tracker/features/rates/presentation/pages/curr
 import 'package:currency_exchange_tracker/features/rates/presentation/widgets/rate_history_chart.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -37,14 +40,18 @@ final RateComparison weakeningUsd = RateComparison(
   previous: rateOn(5, 0.019227),
 );
 
-final List<ExchangeRate> history = [
-  rateOn(1, 0.019300),
-  rateOn(2, 0.019250),
-  rateOn(3, 0.019227),
-  rateOn(4, 0.019200),
-  rateOn(5, 0.019227),
-  rateOn(6, 0.019100),
-];
+/// Seven plotted days, every one with a predecessor.
+final RateHistory sevenDays = RateHistory(
+  points: [
+    RateHistoryPoint(rate: rateOn(1, 0.019300), previous: rateOn(0, 0.019310)),
+    RateHistoryPoint(rate: rateOn(2, 0.019250), previous: rateOn(1, 0.019300)),
+    RateHistoryPoint(rate: rateOn(3, 0.019227), previous: rateOn(2, 0.019250)),
+    RateHistoryPoint(rate: rateOn(4, 0.019200), previous: rateOn(3, 0.019227)),
+    RateHistoryPoint(rate: rateOn(5, 0.019227), previous: rateOn(4, 0.019200)),
+    RateHistoryPoint(rate: rateOn(6, 0.019100), previous: rateOn(5, 0.019227)),
+    RateHistoryPoint(rate: rateOn(7, 0.019050), previous: rateOn(6, 0.019100)),
+  ],
+);
 
 void main() {
   setUpAll(() {
@@ -61,7 +68,6 @@ void main() {
   Future<void> pumpPage(
     WidgetTester tester,
     CurrencyDetailState state, {
-    RateComparison? comparison,
     TextDirection textDirection = TextDirection.ltr,
   }) async {
     bloc = MockCurrencyDetailBloc();
@@ -75,7 +81,7 @@ void main() {
             controller: themeMode,
             child: BlocProvider<CurrencyDetailBloc>.value(
               value: bloc,
-              child: CurrencyDetailPage(comparison: comparison ?? weakeningUsd),
+              child: CurrencyDetailPage(comparison: weakeningUsd),
             ),
           ),
         ),
@@ -83,69 +89,293 @@ void main() {
     );
   }
 
-  group('header — rendered from the entity the route carried', () {
-    testWidgets('shows the rate before any history arrives', (tester) async {
+  LineChartBarData barOf(WidgetTester tester) =>
+      tester.widget<LineChart>(find.byType(LineChart)).data.lineBarsData.single;
+
+  group('the header before history arrives', () {
+    testWidgets('renders the route rate immediately', (tester) async {
       await pumpPage(tester, const HistoryLoadInProgress());
 
       expect(find.text('1 USD = 52.36 EGP'), findsOneWidget);
-      expect(find.text('US Dollar'), findsOneWidget);
+      expect(find.text('+0.35'), findsOneWidget);
+      expect(find.text('+0.66%'), findsOneWidget);
+      expect(find.textContaining('Mar 6, 2024'), findsOneWidget);
     });
 
-    testWidgets('shows the movement and its direction color', (tester) async {
+    testWidgets('colors the movement by direction', (tester) async {
       await pumpPage(tester, const HistoryLoadInProgress());
 
       final percent = tester.widget<Text>(find.text('+0.66%'));
       expect(percent.style?.color, TrendColors.light.weakening);
-      expect(find.text('+0.35'), findsOneWidget);
     });
 
-    testWidgets('shows the day the rate belongs to', (tester) async {
-      await pumpPage(tester, const HistoryLoadInProgress());
+    testWidgets('survives a failed load with the rate still on screen', (
+      tester,
+    ) async {
+      await pumpPage(
+        tester,
+        const HistoryLoadFailure(failure: NetworkFailure()),
+      );
 
-      expect(find.textContaining('Mar 6, 2024'), findsOneWidget);
+      expect(find.text('1 USD = 52.36 EGP'), findsOneWidget);
+      expect(find.text('+0.66%'), findsOneWidget);
+      expect(find.text('Retry'), findsOneWidget);
+    });
+  });
+
+  group('the header is one widget', () {
+    /// The rendered header, as (rate text, change, percent, date) styles.
+    List<TextStyle?> headerStyles(WidgetTester tester) => [
+      tester.widget<Text>(find.textContaining('1 USD =')).style,
+      tester.widget<Text>(find.textContaining('%')).style,
+      tester.widget<Text>(find.textContaining(', 2024')).style,
+    ];
+
+    testWidgets('renders resting and selected days through the same styles', (
+      tester,
+    ) async {
+      await pumpPage(tester, HistoryLoadSuccess(history: sevenDays));
+      final resting = headerStyles(tester);
+
+      await pumpPage(
+        tester,
+        HistoryLoadSuccess(history: sevenDays, selectedIndex: 3),
+      );
+      final selected = headerStyles(tester);
+
+      expect(selected, resting);
     });
 
-    testWidgets('never shows a loading state of its own', (tester) async {
-      await pumpPage(tester, const HistoryLoadInProgress());
+    testWidgets('shows the selected day, not the latest', (tester) async {
+      await pumpPage(
+        tester,
+        HistoryLoadSuccess(history: sevenDays, selectedIndex: 0),
+      );
 
-      expect(find.byType(CircularProgressIndicator), findsNothing);
-      // The header is outside the skeletonized subtree.
+      expect(find.text('1 USD = 51.81 EGP'), findsOneWidget);
+      expect(find.textContaining('Mar 1, 2024'), findsOneWidget);
+    });
+
+    testWidgets('keeps the movement slot when a day has no predecessor', (
+      tester,
+    ) async {
+      final orphan = RateHistory(
+        points: [
+          RateHistoryPoint(rate: rateOn(1, 0.019300)),
+          RateHistoryPoint(
+            rate: rateOn(2, 0.019250),
+            previous: rateOn(1, 0.019300),
+          ),
+        ],
+      );
+
+      await pumpPage(
+        tester,
+        HistoryLoadSuccess(history: orphan, selectedIndex: 0),
+      );
+
+      // Two em-dashes: one for the change, one for the percentage.
+      expect(find.text('—'), findsNWidgets(2));
+    });
+
+    testWidgets('does not move the rate line when the movement is unknown', (
+      tester,
+    ) async {
+      // Both days are selected, so the chip is present either way: the only
+      // difference is that one has a predecessor and one does not.
+      final orphan = RateHistory(
+        points: [
+          RateHistoryPoint(rate: rateOn(1, 0.019300)),
+          RateHistoryPoint(
+            rate: rateOn(2, 0.019250),
+            previous: rateOn(1, 0.019300),
+          ),
+          RateHistoryPoint(
+            rate: rateOn(3, 0.019227),
+            previous: rateOn(2, 0.019250),
+          ),
+        ],
+      );
+
+      await pumpPage(
+        tester,
+        HistoryLoadSuccess(history: orphan, selectedIndex: 1),
+      );
+      final withMovement = tester.getTopLeft(find.textContaining('1 USD ='));
+
+      await pumpPage(
+        tester,
+        HistoryLoadSuccess(history: orphan, selectedIndex: 0),
+      );
+
+      expect(tester.getTopLeft(find.textContaining('1 USD =')), withMovement);
+    });
+
+    testWidgets('the chip appearing does not move the rate line either', (
+      tester,
+    ) async {
+      await pumpPage(tester, HistoryLoadSuccess(history: sevenDays));
+      final resting = tester.getTopLeft(find.textContaining('1 USD ='));
+
+      await pumpPage(
+        tester,
+        HistoryLoadSuccess(history: sevenDays, selectedIndex: 2),
+      );
+
+      expect(tester.getTopLeft(find.textContaining('1 USD =')), resting);
+    });
+  });
+
+  group('the Latest chip', () {
+    testWidgets('is hidden while the latest day is showing', (tester) async {
+      await pumpPage(tester, HistoryLoadSuccess(history: sevenDays));
+
+      expect(find.text('Latest'), findsNothing);
+    });
+
+    testWidgets('appears once an older day is selected', (tester) async {
+      await pumpPage(
+        tester,
+        HistoryLoadSuccess(history: sevenDays, selectedIndex: 2),
+      );
+
+      expect(find.text('Latest'), findsOneWidget);
+    });
+
+    testWidgets('clears the selection when tapped', (tester) async {
+      await pumpPage(
+        tester,
+        HistoryLoadSuccess(history: sevenDays, selectedIndex: 2),
+      );
+
+      await tester.tap(find.text('Latest'));
+      await tester.pump();
+
+      verify(() => bloc.add(const HistoryPointCleared())).called(1);
+    });
+  });
+
+  group('the chart', () {
+    testWidgets('plots one visible dot per day', (tester) async {
+      await pumpPage(tester, HistoryLoadSuccess(history: sevenDays));
+
+      final bar = barOf(tester);
+      expect(bar.spots.length, 7);
+      expect(bar.dotData.show, isTrue);
+    });
+
+    testWidgets('keeps the gradient fill', (tester) async {
+      await pumpPage(tester, HistoryLoadSuccess(history: sevenDays));
+
+      expect(barOf(tester).belowBarData.show, isTrue);
+      expect(barOf(tester).belowBarData.gradient, isNotNull);
+    });
+
+    testWidgets('plots the inverted display rate, never the raw quote', (
+      tester,
+    ) async {
+      await pumpPage(tester, HistoryLoadSuccess(history: sevenDays));
+
+      final spots = barOf(tester).spots;
+      expect(spots.first.y, closeTo(51.8135, 1e-3));
+      expect(spots.last.y, closeTo(52.4934, 1e-3));
+    });
+
+    testWidgets('draws the selected dot larger, ringed in its trend color', (
+      tester,
+    ) async {
+      await pumpPage(
+        tester,
+        HistoryLoadSuccess(history: sevenDays, selectedIndex: 5),
+      );
+
+      final bar = barOf(tester);
+      final resting =
+          bar.dotData.getDotPainter(bar.spots[0], 0, bar, 0)
+              as FlDotCirclePainter;
+      final selected =
+          bar.dotData.getDotPainter(bar.spots[5], 0, bar, 5)
+              as FlDotCirclePainter;
+
+      expect(selected.radius, greaterThan(resting.radius));
+      expect(selected.strokeColor, TrendColors.light.weakening);
+    });
+
+    testWidgets('marks the selection with an indicator line', (tester) async {
+      await pumpPage(
+        tester,
+        HistoryLoadSuccess(history: sevenDays, selectedIndex: 4),
+      );
+
+      final chart = tester.widget<LineChart>(find.byType(LineChart));
+      expect(chart.data.extraLinesData.verticalLines.single.x, 4);
+    });
+
+    testWidgets('draws no indicator line while resting', (tester) async {
+      await pumpPage(tester, HistoryLoadSuccess(history: sevenDays));
+
+      final chart = tester.widget<LineChart>(find.byType(LineChart));
+      expect(chart.data.extraLinesData.verticalLines, isEmpty);
+    });
+
+    testWidgets('leaves the built-in tooltip off — the header is the readout', (
+      tester,
+    ) async {
+      await pumpPage(tester, HistoryLoadSuccess(history: sevenDays));
+
+      final chart = tester.widget<LineChart>(find.byType(LineChart));
+      expect(chart.data.lineTouchData.handleBuiltInTouches, isFalse);
       expect(
-        find.descendant(
-          of: find.byWidgetPredicate((widget) => widget is Skeletonizer),
-          matching: find.text('1 USD = 52.36 EGP'),
-        ),
-        findsNothing,
+        chart.data.lineTouchData.touchSpotThreshold,
+        greaterThanOrEqualTo(24),
       );
     });
 
-    testWidgets('carries the currency code in a hero', (tester) async {
-      await pumpPage(tester, const HistoryLoadInProgress());
+    testWidgets('summarises its range for a screen reader', (tester) async {
+      final handle = SemanticsBinding.instance.ensureSemantics();
+      await pumpPage(tester, HistoryLoadSuccess(history: sevenDays));
 
-      final hero = tester.widget<Hero>(find.byType(Hero));
-      expect(hero.tag, CurrencyDetailPage.heroTagFor(Currency.usd));
+      expect(
+        find.bySemanticsLabel(
+          '7-day chart, from 51.81 to 52.49 Egyptian pounds',
+        ),
+        findsOneWidget,
+      );
+      handle.dispose();
     });
   });
 
-  group('the theme switch', () {
-    testWidgets('is on this screen too, not just the list', (tester) async {
-      await pumpPage(tester, const HistoryLoadInProgress());
+  group('chart touches reach the bloc', () {
+    RateHistoryChart chartOf(WidgetTester tester) =>
+        tester.widget<RateHistoryChart>(find.byType(RateHistoryChart));
 
-      expect(find.byType(ThemeModeButton), findsOneWidget);
+    testWidgets('a tap selects the day', (tester) async {
+      await pumpPage(tester, HistoryLoadSuccess(history: sevenDays));
+
+      chartOf(tester).onPointTapped(3);
+
+      verify(() => bloc.add(const HistoryPointSelected(3))).called(1);
     });
 
-    testWidgets('cycles from here as well', (tester) async {
-      await pumpPage(tester, const HistoryLoadInProgress());
+    testWidgets('a drag scrubs', (tester) async {
+      await pumpPage(tester, HistoryLoadSuccess(history: sevenDays));
 
-      await tester.tap(find.byType(ThemeModeButton));
-      await tester.pump();
+      chartOf(tester).onScrubbed(1);
 
-      expect(themeMode.value, ThemeMode.light);
+      verify(() => bloc.add(const HistoryScrubbed(1))).called(1);
+    });
+
+    testWidgets('a release ends the scrub', (tester) async {
+      await pumpPage(tester, HistoryLoadSuccess(history: sevenDays));
+
+      chartOf(tester).onScrubEnded();
+
+      verify(() => bloc.add(const HistoryScrubEnded())).called(1);
     });
   });
 
-  group('while the history loads', () {
-    testWidgets('shows a chart-shaped skeleton, not a spinner', (tester) async {
+  group('the other chart states', () {
+    testWidgets('shows a chart-shaped skeleton while loading', (tester) async {
       await pumpPage(tester, const HistoryLoadInProgress());
 
       expect(
@@ -155,134 +385,48 @@ void main() {
       expect(find.byType(LineChart), findsNothing);
       expect(find.byType(CircularProgressIndicator), findsNothing);
     });
-  });
 
-  group('with history', () {
-    testWidgets('draws the chart', (tester) async {
-      await pumpPage(tester, HistoryLoadSuccess(points: history));
+    testWidgets('explains a history too short to plot', (tester) async {
+      await pumpPage(tester, const HistoryLoadEmpty());
 
-      expect(find.byType(LineChart), findsOneWidget);
-      expect(
-        find.byWidgetPredicate((widget) => widget is Skeletonizer),
-        findsNothing,
+      expect(find.textContaining('No history'), findsOneWidget);
+      expect(find.text('1 USD = 52.36 EGP'), findsOneWidget);
+    });
+
+    testWidgets('maps a failure to friendly copy and a retry', (tester) async {
+      await pumpPage(
+        tester,
+        const HistoryLoadFailure(failure: TimeoutFailure()),
       );
-    });
 
-    testWidgets('plots one spot per published day', (tester) async {
-      await pumpPage(tester, HistoryLoadSuccess(points: history));
+      expect(find.textContaining('took too long'), findsOneWidget);
+      expect(find.textContaining('DioException'), findsNothing);
 
-      final chart = tester.widget<LineChart>(find.byType(LineChart));
-      expect(chart.data.lineBarsData.single.spots.length, history.length);
-    });
-
-    testWidgets('fills the area under the line with a gradient', (
-      tester,
-    ) async {
-      await pumpPage(tester, HistoryLoadSuccess(points: history));
-
-      final chart = tester.widget<LineChart>(find.byType(LineChart));
-      final bar = chart.data.lineBarsData.single;
-      expect(bar.belowBarData.show, isTrue);
-      expect(bar.belowBarData.gradient, isNotNull);
-    });
-
-    testWidgets('plots the inverted display rate, never the raw quote', (
-      tester,
-    ) async {
-      await pumpPage(tester, HistoryLoadSuccess(points: history));
-
-      final chart = tester.widget<LineChart>(find.byType(LineChart));
-      final spots = chart.data.lineBarsData.single.spots;
-      expect(spots.last.y, closeTo(52.3560, 1e-3));
-      expect(spots.first.y, closeTo(51.8135, 1e-3));
-    });
-  });
-
-  group('bottom axis labels', () {
-    /// A series that crosses a month boundary.
-    final acrossMonths = [
-      ExchangeRate(
-        currency: Currency.usd,
-        rawRate: 0.019300,
-        date: DateTime.utc(2024, 2, 27),
-      ),
-      ExchangeRate(
-        currency: Currency.usd,
-        rawRate: 0.019250,
-        date: DateTime.utc(2024, 2, 28),
-      ),
-      ExchangeRate(
-        currency: Currency.usd,
-        rawRate: 0.019227,
-        date: DateTime.utc(2024, 2, 29),
-      ),
-      ExchangeRate(
-        currency: Currency.usd,
-        rawRate: 0.019200,
-        date: DateTime.utc(2024, 3),
-      ),
-      ExchangeRate(
-        currency: Currency.usd,
-        rawRate: 0.019100,
-        date: DateTime.utc(2024, 3, 2),
-      ),
-    ];
-
-    testWidgets('labels every plotted day', (tester) async {
-      await pumpPage(tester, HistoryLoadSuccess(points: history));
-
-      expect(
-        find.byType(SideTitleWidget),
-        findsNWidgets(history.length),
-      );
-    });
-
-    testWidgets('keeps edge labels inside the chart', (tester) async {
-      await pumpPage(tester, HistoryLoadSuccess(points: history));
-      // fitInside measures its child in a post-frame callback and translates
-      // on the frame after that.
+      await tester.tap(find.text('Retry'));
       await tester.pump();
 
-      final chart = tester.getRect(find.byType(LineChart));
-      // The painted text is what must stay inside: fitInside translates the
-      // child, leaving the wrapper's own box centred on its tick.
-      final labels = find.descendant(
-        of: find.byType(SideTitleWidget),
-        matching: find.byType(Text),
-      );
-      expect(labels, findsNWidgets(history.length));
-      for (final label in labels.evaluate()) {
-        final rect = tester.getRect(find.byWidget(label.widget));
-        expect(rect.left, greaterThanOrEqualTo(chart.left));
-        expect(rect.right, lessThanOrEqualTo(chart.right));
-      }
+      verify(
+        () => bloc.add(const HistoryRequested(Currency.usd)),
+      ).called(1);
+    });
+  });
+
+  group('chrome', () {
+    testWidgets('carries the currency code in a hero', (tester) async {
+      await pumpPage(tester, const HistoryLoadInProgress());
+
+      final hero = tester.widget<Hero>(find.byType(Hero));
+      expect(hero.tag, CurrencyDetailPage.heroTagFor(Currency.usd));
     });
 
-    testWidgets('names the month on the first label only', (tester) async {
-      await pumpPage(tester, HistoryLoadSuccess(points: history));
+    testWidgets('offers the theme switch', (tester) async {
+      await pumpPage(tester, const HistoryLoadInProgress());
 
-      // History runs Mar 1..Mar 6, so only the first label carries a month.
-      expect(find.text('Mar 1'), findsOneWidget);
-      for (final day in ['2', '3', '4', '5', '6']) {
-        expect(find.text(day), findsOneWidget);
-      }
-      expect(find.text('Mar 2'), findsNothing);
+      expect(find.byType(ThemeModeButton), findsOneWidget);
     });
 
-    testWidgets('names the month again when the month changes', (tester) async {
-      await pumpPage(tester, HistoryLoadSuccess(points: acrossMonths));
-
-      expect(find.text('Feb 27'), findsOneWidget);
-      expect(find.text('28'), findsOneWidget);
-      expect(find.text('29'), findsOneWidget);
-      expect(find.text('Mar 1'), findsOneWidget);
-      expect(find.text('2'), findsOneWidget);
-    });
-
-    testWidgets('insets the chart by the same token as the header', (
-      tester,
-    ) async {
-      await pumpPage(tester, HistoryLoadSuccess(points: history));
+    testWidgets('insets the chart by the shared page token', (tester) async {
+      await pumpPage(tester, HistoryLoadSuccess(history: sevenDays));
 
       final padding = tester.widget<Padding>(
         find
@@ -296,17 +440,6 @@ void main() {
       expect(insets.start, AppSpacing.pageHorizontal);
       expect(insets.end, AppSpacing.pageHorizontal);
     });
-
-    testWidgets('the first dot starts at the header leading edge', (
-      tester,
-    ) async {
-      await pumpPage(tester, HistoryLoadSuccess(points: history));
-
-      final chart = tester.getRect(find.byType(LineChart));
-      final rate = tester.getRect(find.text('1 USD = 52.36 EGP'));
-      expect(chart.left, closeTo(AppSpacing.pageHorizontal, 0.5));
-      expect(rate.left, greaterThanOrEqualTo(chart.left));
-    });
   });
 
   group('right-to-left', () {
@@ -315,155 +448,34 @@ void main() {
     ) async {
       await pumpPage(
         tester,
-        HistoryLoadSuccess(points: history),
+        HistoryLoadSuccess(history: sevenDays),
         textDirection: TextDirection.rtl,
       );
 
-      // The axis is data, not prose: oldest stays leftmost, exactly as in LTR.
-      final chart = tester.widget<LineChart>(find.byType(LineChart));
-      final spots = chart.data.lineBarsData.single.spots;
+      final spots = barOf(tester).spots;
       expect(spots.first.y, closeTo(51.8135, 1e-3));
-      expect(spots.last.y, closeTo(52.3560, 1e-3));
+      expect(spots.last.y, closeTo(52.4934, 1e-3));
     });
 
-    testWidgets('still labels every day, month named at the oldest', (
-      tester,
-    ) async {
+    testWidgets('keeps every label inside the plot', (tester) async {
       await pumpPage(
         tester,
-        HistoryLoadSuccess(points: history),
-        textDirection: TextDirection.rtl,
-      );
-
-      expect(find.byType(SideTitleWidget), findsNWidgets(history.length));
-      expect(find.text('Mar 1'), findsOneWidget);
-      expect(find.text('6'), findsOneWidget);
-    });
-
-    testWidgets('keeps edge labels inside the chart', (tester) async {
-      await pumpPage(
-        tester,
-        HistoryLoadSuccess(points: history),
+        HistoryLoadSuccess(history: sevenDays),
         textDirection: TextDirection.rtl,
       );
       await tester.pump();
 
       final chart = tester.getRect(find.byType(LineChart));
-      // The painted text is what must stay inside: fitInside translates the
-      // child, leaving the wrapper's own box centred on its tick.
       final labels = find.descendant(
         of: find.byType(SideTitleWidget),
         matching: find.byType(Text),
       );
-      expect(labels, findsNWidgets(history.length));
+      expect(labels, findsNWidgets(7));
       for (final label in labels.evaluate()) {
         final rect = tester.getRect(find.byWidget(label.widget));
         expect(rect.left, greaterThanOrEqualTo(chart.left));
         expect(rect.right, lessThanOrEqualTo(chart.right));
       }
-    });
-
-    testWidgets('scrubs the day the finger is actually on', (tester) async {
-      await pumpPage(
-        tester,
-        HistoryLoadSuccess(points: history),
-        textDirection: TextDirection.rtl,
-      );
-
-      tester
-          .widget<RateHistoryChart>(find.byType(RateHistoryChart))
-          .onPointScrubbed(history.first);
-      await tester.pump();
-
-      expect(find.textContaining('Mar 1, 2024'), findsOneWidget);
-    });
-  });
-
-  group('scrubbing', () {
-    testWidgets('shows the touched point in the header', (tester) async {
-      await pumpPage(tester, HistoryLoadSuccess(points: history));
-
-      final chart = tester.widget<RateHistoryChart>(
-        find.byType(RateHistoryChart),
-      );
-      chart.onPointScrubbed(history.first);
-      await tester.pump();
-
-      expect(find.text('1 USD = 51.81 EGP'), findsOneWidget);
-      expect(find.textContaining('Mar 1, 2024'), findsOneWidget);
-    });
-
-    testWidgets('hides the day movement while scrubbing', (tester) async {
-      await pumpPage(tester, HistoryLoadSuccess(points: history));
-
-      tester
-          .widget<RateHistoryChart>(find.byType(RateHistoryChart))
-          .onPointScrubbed(history.first);
-      await tester.pump();
-
-      expect(find.text('+0.66%'), findsNothing);
-    });
-
-    testWidgets('reverts to the current rate on release', (tester) async {
-      await pumpPage(tester, HistoryLoadSuccess(points: history));
-
-      final chart = tester.widget<RateHistoryChart>(
-        find.byType(RateHistoryChart),
-      );
-      chart.onPointScrubbed(history.first);
-      await tester.pump();
-      chart.onPointScrubbed(null);
-      await tester.pump();
-
-      expect(find.text('1 USD = 52.36 EGP'), findsOneWidget);
-      expect(find.text('+0.66%'), findsOneWidget);
-    });
-  });
-
-  group('when the history fails', () {
-    testWidgets('keeps the header rate on screen', (tester) async {
-      await pumpPage(
-        tester,
-        const HistoryLoadFailure(failure: NetworkFailure()),
-      );
-
-      expect(find.text('1 USD = 52.36 EGP'), findsOneWidget);
-      expect(find.text('+0.66%'), findsOneWidget);
-    });
-
-    testWidgets('shows a friendly message, never the exception', (
-      tester,
-    ) async {
-      await pumpPage(
-        tester,
-        const HistoryLoadFailure(failure: TimeoutFailure()),
-      );
-
-      expect(find.textContaining('took too long'), findsOneWidget);
-      expect(find.textContaining('DioException'), findsNothing);
-    });
-
-    testWidgets('retrying asks for the history again', (tester) async {
-      await pumpPage(
-        tester,
-        const HistoryLoadFailure(failure: NetworkFailure()),
-      );
-
-      await tester.tap(find.text('Retry'));
-      await tester.pump();
-
-      verify(
-        () => bloc.add(const HistoryRequested(Currency.usd)),
-      ).called(1);
-    });
-  });
-
-  group('when the history is too short to plot', () {
-    testWidgets('explains it and keeps the header', (tester) async {
-      await pumpPage(tester, const HistoryLoadEmpty());
-
-      expect(find.textContaining('No history'), findsOneWidget);
-      expect(find.text('1 USD = 52.36 EGP'), findsOneWidget);
     });
   });
 }

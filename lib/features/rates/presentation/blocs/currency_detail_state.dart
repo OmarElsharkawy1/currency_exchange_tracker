@@ -1,5 +1,6 @@
 import 'package:currency_exchange_tracker/core/failures/failures.dart';
-import 'package:currency_exchange_tracker/features/rates/domain/entities/exchange_rate.dart';
+import 'package:currency_exchange_tracker/features/rates/domain/entities/rate_history.dart';
+import 'package:currency_exchange_tracker/features/rates/domain/entities/rate_history_point.dart';
 import 'package:equatable/equatable.dart';
 
 /// What the detail screen's chart is showing.
@@ -23,13 +24,28 @@ final class HistoryLoadInProgress extends CurrencyDetailState {
 /// History is on screen.
 final class HistoryLoadSuccess extends CurrencyDetailState {
   /// Creates the state.
-  const HistoryLoadSuccess({required this.points});
+  const HistoryLoadSuccess({required this.history, this.selectedIndex});
 
-  /// The published days, oldest first.
-  final List<ExchangeRate> points;
+  /// The plotted days, oldest first.
+  final RateHistory history;
+
+  /// Which day the header is reading out, or `null` for the most recent.
+  final int? selectedIndex;
+
+  /// The day the header shows: the selected one, or the latest.
+  ///
+  /// The single thing the header reads, so a selected point and a resting
+  /// header are the same shape of data and render through the same widget.
+  RateHistoryPoint get selectedPoint => switch (selectedIndex) {
+    null => history.latest,
+    final index => history.pointAt(index) ?? history.latest,
+  };
+
+  /// Whether the header is showing the most recent day.
+  bool get isShowingLatest => selectedIndex == null;
 
   @override
-  List<Object?> get props => [points];
+  List<Object?> get props => [history, selectedIndex];
 }
 
 /// The history came back with too few days to draw a line.

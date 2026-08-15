@@ -286,6 +286,74 @@ void main() {
       });
     }
 
+    /// A cache that actually remembers, so a second call can hit it.
+    void serveWritableCache() {
+      final stored = <DateTime, RatesResponseDto>{};
+      when(() => local.writeForDate(any())).thenAnswer((invocation) async {
+        final rates = invocation.positionalArguments.first as RatesResponseDto;
+        stored[rates.date] = rates;
+      });
+      when(() => local.readForDate(any())).thenAnswer((invocation) async {
+        final date = invocation.positionalArguments.first as DateTime;
+        final hit = stored[date];
+        return hit == null ? failed(const CacheMissFailure()) : success(hit);
+      });
+    }
+
+    test('returns exactly the days asked for', () async {
+      servePerfectHistory();
+
+      final (history, failure) = await repository.getHistory(Currency.usd);
+
+      expect(failure, isNull);
+      expect(history!.length, 7);
+      expect(history.points.map((point) => point.date).toSet().length, 7);
+    });
+
+    test('gives every returned day a predecessor to compare against', () async {
+      servePerfectHistory();
+
+      final (history, _) = await repository.getHistory(Currency.usd);
+
+      expect(
+        history!.points.every((point) => point.change != null),
+        isTrue,
+        reason: 'the extra fetched day feeds the oldest point',
+      );
+    });
+
+    test('fetches one more day than it plots', () async {
+      servePerfectHistory();
+
+      await repository.getHistory(Currency.usd);
+
+      // The anchor day comes from the latest payload, so seven dated fetches
+      // cover the six remaining plotted days plus the extra predecessor.
+      verify(() => remote.fetchForDate(any())).called(7);
+    });
+
+    test('runs oldest to newest', () async {
+      servePerfectHistory();
+
+      final (history, _) = await repository.getHistory(Currency.usd, days: 3);
+
+      expect(history!.points.map((point) => point.date), [
+        DateTime.utc(2024, 3, 4),
+        DateTime.utc(2024, 3, 5),
+        anchorDate,
+      ]);
+    });
+
+    test('ends on the anchored latest date, so the header matches the last '
+        'dot', () async {
+      servePerfectHistory();
+
+      final (history, _) = await repository.getHistory(Currency.usd);
+
+      expect(history!.latest.date, anchorDate);
+      expect(history.latest.rate.rawRate, 0.019100);
+    });
+
     test(
       'anchors on the latest payload date, never on the device clock',
       () async {
@@ -298,56 +366,40 @@ void main() {
         );
 
         expect(failure, isNull);
-        expect(history!.map((rate) => rate.date), [
-          DateTime.utc(2024, 3, 4),
-          DateTime.utc(2024, 3, 5),
-          anchorDate,
-        ]);
+        expect(history!.latest.date, anchorDate);
       },
     );
 
-    test('returns seven points oldest first by default', () async {
+    test('never refetches a day the cache already holds', () async {
       servePerfectHistory();
+      serveWritableCache();
 
-      final (history, _) = await repository.getHistory(Currency.usd);
+      await repository.getHistory(Currency.usd);
+      clearInteractions(remote);
+      await repository.getHistory(Currency.usd);
 
-      expect(history!.length, 7);
-      expect(history.first.date, DateTime.utc(2024, 2, 29));
-      expect(history.last.date, anchorDate);
-      expect(history.every((rate) => rate.currency == Currency.usd), isTrue);
+      verifyNever(() => remote.fetchForDate(any()));
+    });
+
+    test('caches the extra predecessor day like any other', () async {
+      servePerfectHistory();
+      serveWritableCache();
+
+      await repository.getHistory(Currency.usd, days: 2);
+      clearInteractions(remote);
+      // The oldest date is only a predecessor, never a dot — it must still
+      // be a cache hit next time.
+      await repository.getHistory(Currency.usd, days: 2);
+
+      verifyNever(() => remote.fetchForDate(any()));
     });
 
     test('reuses the latest payload for the anchor day', () async {
       servePerfectHistory();
 
-      final (history, _) = await repository.getHistory(Currency.usd, days: 2);
+      await repository.getHistory(Currency.usd, days: 2);
 
-      expect(history!.last.rawRate, 0.019100); // the latest payload's quote
       verifyNever(() => remote.fetchForDate(anchorDate));
-    });
-
-    test('never touches the network for a date already cached', () async {
-      when(
-        () => local.readForDate(DateTime.utc(2024, 3, 5)),
-      ).thenAnswer((_) async => success(yesterdayDto));
-
-      final (history, failure) = await repository.getHistory(
-        Currency.usd,
-        days: 2,
-      );
-
-      expect(failure, isNull);
-      expect(history!.first.rawRate, 0.019227);
-      verifyNever(() => remote.fetchForDate(any()));
-      verifyNever(() => local.writeForDate(any()));
-    });
-
-    test('caches every freshly fetched day', () async {
-      servePerfectHistory();
-
-      await repository.getHistory(Currency.usd, days: 3);
-
-      verify(() => local.writeForDate(any())).called(2);
     });
 
     test('surfaces a walk-back that ran out of steps', () async {
@@ -368,41 +420,6 @@ void main() {
       );
     });
 
-    test(
-      'collapses days a walk-back answered with the same snapshot',
-      () async {
-        // A weekend: both Sunday and Saturday resolve to Friday's file.
-        final friday = dtoFor(DateTime.utc(2024, 3, 4));
-        when(
-          () => remote.fetchForDate(any()),
-        ).thenAnswer((_) async => success(friday));
-
-        final (history, failure) = await repository.getHistory(
-          Currency.usd,
-          days: 3,
-        );
-
-        expect(failure, isNull);
-        expect(history!.map((rate) => rate.date), [
-          DateTime.utc(2024, 3, 4),
-          anchorDate,
-        ]);
-      },
-    );
-
-    test('fetches the anchor when no cached latest payload exists', () async {
-      servePerfectHistory();
-
-      final (history, failure) = await repository.getHistory(
-        Currency.usd,
-        days: 1,
-      );
-
-      expect(failure, isNull);
-      expect(history!.single.date, anchorDate);
-      verify(() => remote.fetchLatest()).called(1);
-    });
-
     test('surfaces the anchor failure when latest is unreachable and '
         'uncached', () async {
       when(
@@ -417,17 +434,16 @@ void main() {
 
     test('works offline entirely from cache', () async {
       cacheLatest(latestDto, age: const Duration(minutes: 2));
-      when(
-        () => local.readForDate(DateTime.utc(2024, 3, 5)),
-      ).thenAnswer((_) async => success(yesterdayDto));
+      // A cache holding every published day the window needs.
+      when(() => local.readForDate(any())).thenAnswer((invocation) async {
+        final date = invocation.positionalArguments.first as DateTime;
+        return success(dtoFor(date));
+      });
 
-      final (history, failure) = await repository.getHistory(
-        Currency.usd,
-        days: 2,
-      );
+      final (history, failure) = await repository.getHistory(Currency.usd);
 
       expect(failure, isNull);
-      expect(history!.length, 2);
+      expect(history!.length, 7);
       verifyNever(() => remote.fetchLatest());
       verifyNever(() => remote.fetchForDate(any()));
     });

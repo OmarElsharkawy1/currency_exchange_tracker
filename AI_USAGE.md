@@ -244,3 +244,26 @@ Why: [draft] The first decision was a constraint check, not a design one: CLAUDE
 Two failures were informative rather than annoying. RepositoryProvider refuses Listenable subtypes by design — providers won't rebuild dependents for one — which pushed the design to InheritedNotifier, where the dependency mechanism both delivers the rebuild and scopes it to the button. And IconButton(tooltip:) populates the semantics tooltip property, not label, so find.bySemanticsLabel found nothing against a perfectly working button. Dumping the semantics tree rather than trusting either side settled it: the label is now explicit, with the tooltip excluded from semantics so assistive tech announces the mode once instead of twice.
 
 Follow-ups: Three issued and closed in one pass (persistence, three-way cycle, detail-screen button). Twice in this work a new AppBar action broke existing page tests en masse — 29 on the list screen, then 27 on the detail screen — because the button requires a ThemeModeScope ancestor. Both times the fix was to give the tests the scope rather than to soften ThemeModeScope.of into a silent fallback: a missing scope means real wiring is broken and should stay loud.
+
+# 2026-08-15 — Phase 4b: Detail header & chart interaction fixes
+
+Prompt: Fix two symptoms on the detail screen: (a) touching a chart point loses the change and shifts the date style — resting and scrubbed headers are visibly different widgets; (b) the 7 history points are invisible, so the user has to hover to find them. Six items: RateHistoryPoint / RateHistory in domain delegating all math to ExchangeRate; getHistory fetching days + 1 so every displayed point has a change, newest point pinned to the anchored latest; selection as bloc state with tap/scrub/clear events and tap-selection surviving a drag; one \_RateHeader taking a RateHistoryPoint, em-dash in the same slot when change is null, plus a "Latest" chip; visible tappable dots with a 24dp threshold, indicator line, no built-in tooltip; a chart Semantics summary. Verify the dot count is 7. Report analyze/test/format and the presentation/ greps.
+
+Output: Two domain value types, repository returning RateHistory with days + 1 fetching, bloc carrying RateHistory + selectedIndex with a \_pinnedIndex for scrub-then-release, one header widget (old currency_detail_header.dart deleted), and a chart with per-day dots, ring-highlighted selection, dashed indicator, and handleBuiltInTouches: false. Then two follow-ups: the screen-reader phrasing extracted to a shared function used by both screens, and the walk-back policy changed from "fewer dots is acceptable" to "keep stepping until days + 1 distinct published dates, bounded, else fail". 327 tests green, analyzer clean, format clean, all presentation/ greps zero.
+
+Verdict: Accepted
+
+Why: [draft] The dot-count question turned out to be the same defect as symptom (a): the old code fetched days dates and spent one as a predecessor, so it plotted 6 and left the oldest point with no change. Fetching days + 1 fixed the count and the missing movement in one move — worth noting because the prompt listed them as separate items.
+
+Three things the tests caught that reasoning alone would not have:
+
+The "Latest" chip shoved the rate line down 28px when it appeared. My first assertion had compared resting-without-chip against selected-with-chip, so the test was measuring the wrong pair — but the jump underneath was real. Fixed with a reserved-height action row, then split into two honest tests: em-dash vs real movement (both selected), and chip present vs absent.
+The chart's Semantics label merged with the axis labels, announcing "…Egyptian pounds, Mar 1, 2, 3, 4…". Dumping the semantics tree showed the concatenation rather than guessing at it.
+Two repository tests were stale under the new history policy and were replaced rather than patched: one asserted the collapse behavior the follow-up rejected, the other had stubbed every date to a single cached day and only passed because fewer dots used to be acceptable.
+The layering flag I raised on the first follow-up proved half-right, which is the useful outcome: moving rate_semantics.dart into the feature module cleaned up the core → features edge, but running the confirming grep showed core/di/injection.dart importing six feature types. That is the composition root doing its job, not a violation — so the recorded rule carries its one exception explicitly instead of pretending the grep was clean.
+
+Follow-ups: Three issued, all closed.
+
+Consolidate the duplicated screen-reader phrasing (list-screen exclusion lifted) — one function, both call sites, two widget tests pumping the list row and the detail header with the same day and asserting identical bySemanticsLabel.
+Change the walk-back policy so a weekend spans more calendar days rather than dropping dots — "last 7 published rates, not last 7 calendar days", bounded at 7 extra days then RateUnavailableFailure, documented in the README. Today being Saturday was the concrete trigger; a reviewer opening the app would have seen 5–6 points.
+Move rate_semantics.dart out of core/ and record the layering grep.

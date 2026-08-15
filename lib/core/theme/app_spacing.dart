@@ -18,4 +18,10 @@ abstract final class AppSpacing {
 
   /// Gap between a heading and the content it introduces.
   static const double sectionGap = 8;
+
+  /// Height reserved for a header's top row.
+  ///
+  /// Fixed so a control that only appears sometimes — the detail header's
+  /// "Latest" chip — cannot shove everything below it down when it does.
+  static const double headerActionRow = 36;
 }

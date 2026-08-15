@@ -1,6 +1,6 @@
 import 'package:currency_exchange_tracker/core/failures/failures.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/entities/currency.dart';
-import 'package:currency_exchange_tracker/features/rates/domain/entities/exchange_rate.dart';
+import 'package:currency_exchange_tracker/features/rates/domain/entities/rate_history.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/entities/rates_snapshot.dart';
 
 /// The one way into rate data.
@@ -19,11 +19,14 @@ abstract class RatesRepository {
 
   /// The last [days] published rates for [currency], oldest first.
   ///
+  /// Every returned point carries the day before it, so the chart can report
+  /// a movement for each day it draws. That costs one extra fetch: `days + 1`
+  /// dates are read, and the oldest is used only as the first point's
+  /// predecessor.
+  ///
   /// Dates are anchored on the `date` field of the latest payload, never on
-  /// device local time. Days already in the immutable cache are never
-  /// refetched.
-  Future<Result<List<ExchangeRate>>> getHistory(
-    Currency currency, {
-    int days = 7,
-  });
+  /// device local time, and the newest point is that same anchor date — the
+  /// resting header and the last plotted dot are the same rate. Days already
+  /// in the immutable cache are never refetched.
+  Future<Result<RateHistory>> getHistory(Currency currency, {int days = 7});
 }

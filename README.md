@@ -25,6 +25,14 @@ exist upstream, which is equally true on both mirrors. That case is handled by
 the walk-back instead — step one day back, at most three extra days, then
 surface `RateUnavailableFailure`.
 
+## History window
+
+The detail chart shows the **last 7 published rates, not the last 7 calendar
+days** — the source publishes on business days, so a week of rates spans more
+than a week of dates whenever a weekend or holiday intervenes. The repository
+keeps stepping back until it has 7 distinct published dates (plus one more as
+the oldest point's predecessor), and the axis labels are the real file dates.
+
 ## Rate direction
 
 The API quotes EGP → foreign (`egp.usd = 0.019227`); the UI shows foreign → EGP

@@ -44,11 +44,17 @@ features/rates/
     data_sources/     rates_remote_data_source.dart, rates_local_data_source.dart
     repositories/     rates_repository_impl.dart
   presentation/
-    blocs/ pages/ widgets/
+    blocs/ pages/ widgets/ formatting/
 ```
 
 No `models/` directory: wire types live in `dtos/`, domain types in `entities/`.
-The test tree mirrors this path for path.
+`presentation/formatting/` holds pure functions that turn domain types into user
+copy — anything that needs a domain type but is not a widget. The test tree
+mirrors this path for path.
+
+`lib/core/` may not import from `lib/features/`. The single exception is
+`core/di/injection.dart`, the composition root, which has to name concrete
+types to build them.
 
 ## Rate math — the highest-risk correctness area. Read twice.
 
@@ -196,3 +202,18 @@ No `curRate`, `hist`, `resp`, `prev`.
 2. `flutter test` → all green
 3. `dart format .` → no diff
 4. No silent TODOs; unresolved questions go back to me in the summary
+
+## Phase 7 audit — every grep returns zero
+
+Run these and paste the output. Each one guards a rule that is easy to break
+quietly and expensive to find later.
+
+```bash
+grep -rn '1 /' lib/features/rates/presentation/            # inversion in a widget
+grep -rn '\.difference(' lib/features/rates/presentation/  # date math in a widget
+grep -rn 'DateTime\.now' lib/features/rates/presentation/  # a clock outside Clock
+grep -rn 'Timer(' lib/ --include='*.dart' \
+  | grep -v 'lib/core/clock/clock.dart'                    # a timer outside SystemClock
+grep -rn 'package:currency_exchange_tracker/features/' lib/core/ --include='*.dart' \
+  | grep -v 'lib/core/di/injection.dart'                   # core depending on a feature
+```

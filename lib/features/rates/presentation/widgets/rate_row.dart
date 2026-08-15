@@ -2,6 +2,8 @@ import 'package:currency_exchange_tracker/core/extensions/context_extensions.dar
 import 'package:currency_exchange_tracker/core/formatting/rate_formatter.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/entities/rate_comparison.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/entities/rate_direction.dart';
+import 'package:currency_exchange_tracker/features/rates/domain/entities/rate_history_point.dart';
+import 'package:currency_exchange_tracker/features/rates/presentation/formatting/rate_semantics.dart';
 import 'package:currency_exchange_tracker/features/rates/presentation/pages/currency_detail_page.dart';
 import 'package:flutter/material.dart';
 
@@ -19,7 +21,7 @@ class RateRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Semantics(
-      label: _semanticsLabel(comparison),
+      label: RateSemantics.describe(_pointOf(comparison)),
       excludeSemantics: true,
       child: Padding(
         padding: const EdgeInsetsDirectional.symmetric(
@@ -130,16 +132,6 @@ Color _colorFor(BuildContext context, RateDirection direction) =>
       RateDirection.flat => context.colors.onSurfaceVariant,
     };
 
-/// What a screen reader announces for the row.
-String _semanticsLabel(RateComparison comparison) {
-  final name = comparison.currency.englishName;
-  final rate = RateFormatter.spokenRate(comparison.displayRate);
-  final movement = switch (comparison.direction) {
-    RateDirection.egpWeakening =>
-      'up ${RateFormatter.absolutePercent(comparison.percentChange)} percent',
-    RateDirection.egpStrengthening =>
-      'down ${RateFormatter.absolutePercent(comparison.percentChange)} percent',
-    RateDirection.flat => 'unchanged',
-  };
-  return '$name, $rate Egyptian pounds, $movement';
-}
+/// The row's day in the shape both screens describe.
+RateHistoryPoint _pointOf(RateComparison comparison) =>
+    RateHistoryPoint(rate: comparison.current, previous: comparison.previous);

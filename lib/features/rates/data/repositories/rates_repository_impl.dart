@@ -1,4 +1,5 @@
 import 'package:currency_exchange_tracker/core/clock/clock.dart';
+import 'package:currency_exchange_tracker/core/extensions/date_time_extensions.dart';
 import 'package:currency_exchange_tracker/core/failures/failures.dart';
 import 'package:currency_exchange_tracker/features/rates/data/data_sources/rates_local_data_source.dart';
 import 'package:currency_exchange_tracker/features/rates/data/data_sources/rates_remote_data_source.dart';
@@ -6,6 +7,8 @@ import 'package:currency_exchange_tracker/features/rates/data/dtos/rates_respons
 import 'package:currency_exchange_tracker/features/rates/domain/entities/currency.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/entities/exchange_rate.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/entities/rate_comparison.dart';
+import 'package:currency_exchange_tracker/features/rates/domain/entities/rate_history.dart';
+import 'package:currency_exchange_tracker/features/rates/domain/entities/rate_history_point.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/entities/rates_snapshot.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/repositories/rates_repository.dart';
 
@@ -39,6 +42,13 @@ class RatesRepositoryImpl implements RatesRepository {
   /// Only the mutable `latest` entry ages. Dated snapshots never expire.
   static const Duration latestCacheTtl = Duration(minutes: 15);
 
+  /// Extra calendar days the history may reach past the days it plots.
+  ///
+  /// The source publishes on business days, so a week of published rates can
+  /// span more than a week of calendar dates. This bounds how far back that
+  /// search may go before giving up.
+  static const int maxExtraCalendarDays = 7;
+
   @override
   Future<Result<RatesSnapshot>> getLatestRates({
     bool forceRefresh = false,
@@ -68,7 +78,7 @@ class RatesRepositoryImpl implements RatesRepository {
   }
 
   @override
-  Future<Result<List<ExchangeRate>>> getHistory(
+  Future<Result<RateHistory>> getHistory(
     Currency currency, {
     int days = 7,
   }) async {
@@ -76,16 +86,21 @@ class RatesRepositoryImpl implements RatesRepository {
     if (payload == null) return failed(failure!);
 
     final anchorDate = payload.rates.date;
-    // Keyed by the date the API actually answered with: a walk-back can hand
-    // back the same snapshot for two requested days, and a chart must not
-    // plot that day twice.
+    // Keyed by the date the API actually answered with: two requested days
+    // can resolve to one published file over a weekend, and that counts once.
     final byDate = <DateTime, ExchangeRate>{};
 
-    for (var step = 0; step < days; step++) {
+    // One more published day than is plotted: the extra is never a dot, it
+    // only gives the oldest plotted point something to be compared against.
+    final wanted = days + 1;
+    final lastStep = wanted + maxExtraCalendarDays;
+
+    for (var step = 0; step <= lastStep && byDate.length < wanted; step++) {
       final requestedDate = anchorDate.subtract(Duration(days: step));
       final RatesResponseDto rates;
       if (step == 0) {
-        // The list screen already holds this day; no request for it.
+        // The list screen already holds this day; no request for it. It is
+        // also what pins the newest point to the anchored latest date.
         rates = payload.rates;
       } else {
         final (dayRates, dayFailure) = await _ratesForDate(requestedDate);
@@ -98,9 +113,44 @@ class RatesRepositoryImpl implements RatesRepository {
       byDate[rate.date] = rate;
     }
 
+    if (byDate.length < wanted) {
+      // The search reached its bound without finding enough published days.
+      return failed(
+        RateUnavailableFailure(
+          currencyCode: currency.code,
+          requestedDate: anchorDate
+              .subtract(Duration(days: lastStep))
+              .toApiDate(),
+        ),
+      );
+    }
+
+    return success(_historyFrom(byDate, days: days));
+  }
+
+  /// Builds the plotted history from the published days that came back.
+  ///
+  /// Each point is paired with the day before it in the series, and the
+  /// oldest day is then dropped: it exists to be a predecessor, not a dot.
+  RateHistory _historyFrom(
+    Map<DateTime, ExchangeRate> byDate, {
+    required int days,
+  }) {
     final ordered = byDate.values.toList()
       ..sort((first, second) => first.date.compareTo(second.date));
-    return success(ordered);
+
+    final points = [
+      for (var index = 0; index < ordered.length; index++)
+        RateHistoryPoint(
+          rate: ordered[index],
+          previous: index == 0 ? null : ordered[index - 1],
+        ),
+    ];
+
+    final displayed = points.length > days
+        ? points.sublist(points.length - days)
+        : points;
+    return RateHistory(points: displayed);
   }
 
   /// The latest payload, from cache while it is fresh and from the network
