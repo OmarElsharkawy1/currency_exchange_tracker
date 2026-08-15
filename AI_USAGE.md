@@ -156,3 +156,23 @@ Two things surfaced during it worth recording:
 The tree as written named only three entity files; rate_comparison.dart and rates_snapshot.dart also exist, so they were filed under entities/ and added to the CLAUDE.md listing rather than left undocumented. Still open if you want them separated (e.g. a value_objects/ sibling).
 First move attempt used git mv and failed — the files were never committed, so they weren't under version control. Imports were rewritten before the moves landed, leaving the tree briefly broken; redone with plain mv in the same turn. Root cause is that none of this work is committed yet.
 The six sign-off decisions from the original output remain unanswered — no follow-up touched them.
+
+# 2026-08-15 — Phase 3: Rates list feature
+
+# Prompt:
+
+Build RatesListBloc + the list screen per CLAUDE.md. Bloc: RatesRequested / RatesRefreshed events, sealed RatesLoadInProgress / RatesLoadSuccess / RatesLoadFailure states, success carrying entities + lastUpdated + isFromCache, no math or formatting in the bloc. UI: five rows with currency name, code, display rate as "1 USD = 52.01 EGP" via NumberFormat, absolute + percentage change, color from context.trendColors keyed off direction; Skeletonizer rows while loading; pull-to-refresh; failure state mapped to a friendly message per Failure type with retry; empty state handled; Semantics label per row; every extracted piece a private widget class, zero \_build methods. bloc_test coverage for all transitions including refresh-while-loaded.
+
+# Output:
+
+Bloc + sealed event/state families, a page whose body is one exhaustive switch, and five widget-class files (row, skeleton list, error view, empty view, last-updated banner), plus RateFormatter (all intl) and a Failure→copy extension so no widget reasons about failure types. Skeleton rows are real RateRows under Skeletonizer, so the shimmer matches the loaded shape exactly. Wired into app.dart and DI as a factory. 178 tests green (13 bloc_test, 15 widget, 14 formatter), analyzer clean, format clean. Five decisions flagged for sign-off rather than silently taken.
+
+# Verdict: Accepted
+
+# Why:
+
+[draft] Every hard constraint held: no \_build methods, widget logic is a single sealed switch with no stray conditionals (the cache banner picks copy via switch (isFromCache), not a ternary), colors resolve only through context.trendColors keyed on direction, all numbers go through NumberFormat, EdgeInsetsDirectional throughout, no CircularProgressIndicator anywhere. The bloc stays a transition machine — the pass-through test asserts identical(state.rates, repositoryRates), so it provably computes nothing. Tests caught two real design gaps rather than rubber-stamping the code: a JPY day-move rounds to +0.00 at two decimals (formatter now widens to four below 0.01), and the semantics label had to encode CLAUDE.md's counterintuitive rule — egpWeakening announces "up 0.66 percent" while painted in the weakening color. Two failures during the run were test-harness bugs, not product bugs, and were fixed on the test side: Skeletonizer is abstract so find.byType misses its subclass, and BlocBuilder latches state from the stream so re-pumping with a changed state stub silently kept showing the first state — that one would have made three assertions pass vacuously.
+
+# Follow-ups:
+
+None issued yet.
