@@ -43,6 +43,8 @@ abstract final class RateFormatter {
 
   static final DateFormat _chartDay = DateFormat('MMM d');
 
+  static final DateFormat _chartDayOfMonth = DateFormat('d');
+
   /// The rate as the UI states it: `1 USD = 52.01 EGP`.
   static String rateSentence(String currencyCode, double displayRate) =>
       '1 $currencyCode = ${_rate.format(displayRate)} EGP';
@@ -72,8 +74,11 @@ abstract final class RateFormatter {
   /// The day a rate belongs to, as `Mar 6, 2024`.
   static String rateDate(DateTime date) => _rateDate.format(date);
 
-  /// A chart axis label, as `Mar 6`.
+  /// A chart axis label carrying its month, as `Mar 6`.
   static String chartDay(DateTime date) => _chartDay.format(date);
+
+  /// A chart axis label for a day inside an already-named month, as `6`.
+  static String chartDayOfMonth(DateTime date) => _chartDayOfMonth.format(date);
 
   /// How long ago [moment] was, relative to [now]: `5 minutes ago`.
   ///

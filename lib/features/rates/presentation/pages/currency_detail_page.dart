@@ -1,4 +1,5 @@
 import 'package:currency_exchange_tracker/core/extensions/context_extensions.dart';
+import 'package:currency_exchange_tracker/core/theme/app_spacing.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/entities/currency.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/entities/exchange_rate.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/entities/rate_comparison.dart';
@@ -56,7 +57,12 @@ class _CurrencyDetailPageState extends State<CurrencyDetailPage> {
             ),
             Expanded(
               child: Padding(
-                padding: const EdgeInsetsDirectional.fromSTEB(16, 8, 16, 24),
+                padding: const EdgeInsetsDirectional.fromSTEB(
+                  AppSpacing.pageHorizontal,
+                  AppSpacing.sectionGap,
+                  AppSpacing.pageHorizontal,
+                  AppSpacing.pageBottom,
+                ),
                 child: BlocBuilder<CurrencyDetailBloc, CurrencyDetailState>(
                   builder: (context, state) => switch (state) {
                     HistoryLoadInProgress() => const RateHistoryChartSkeleton(),

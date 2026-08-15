@@ -9,6 +9,10 @@ import 'package:flutter/material.dart';
 /// Plots `displayRate` — the value the screen talks about — never the raw
 /// quote. Dragging across it reports the touched day through
 /// [onPointScrubbed]; releasing reports `null`.
+///
+/// Time always runs left to right, in every locale: the axis is data, not
+/// prose. Only the labels, insets and surrounding chrome follow the text
+/// direction.
 class RateHistoryChart extends StatelessWidget {
   /// Creates the chart for [points], oldest first.
   const RateHistoryChart({
@@ -26,13 +30,14 @@ class RateHistoryChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final lineColor = context.colors.primary;
+    final bounds = _boundsOf(points);
 
     return LineChart(
       duration: const Duration(milliseconds: 450),
       curve: Curves.easeOutCubic,
       LineChartData(
-        minY: _bounds.min,
-        maxY: _bounds.max,
+        minY: bounds.min,
+        maxY: bounds.max,
         gridData: FlGridData(
           drawVerticalLine: false,
           getDrawingHorizontalLine: (_) =>
@@ -46,10 +51,11 @@ class RateHistoryChart extends StatelessWidget {
           bottomTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
-              interval: _labelInterval,
+              // Every plotted day gets a label.
+              interval: 1,
               reservedSize: 28,
               getTitlesWidget: (value, meta) =>
-                  _DayLabel(date: points[value.toInt()].date),
+                  _DayLabel(meta: meta, label: _labelAt(value.toInt())),
             ),
           ),
         ),
@@ -108,12 +114,24 @@ class RateHistoryChart extends StatelessWidget {
     );
   }
 
-  /// Only the first and last day get a label; seven would collide.
-  double get _labelInterval => (points.length - 1).toDouble();
+  /// The label for the day at [index].
+  ///
+  /// The oldest day is always leftmost and always index 0, so "name the month
+  /// at the start, and again whenever the series crosses into a new one" is a
+  /// comparison with the day before it.
+  String _labelAt(int index) {
+    final date = points[index].date;
+    final namesItsMonth =
+        index == 0 || date.month != points[index - 1].date.month;
+    return switch (namesItsMonth) {
+      true => RateFormatter.chartDay(date),
+      false => RateFormatter.chartDayOfMonth(date),
+    };
+  }
 
   /// A little headroom either side so the line never touches the frame.
-  ({double min, double max}) get _bounds {
-    final values = points.map((point) => point.displayRate).toList()..sort();
+  ({double min, double max}) _boundsOf(List<ExchangeRate> days) {
+    final values = days.map((day) => day.displayRate).toList()..sort();
     final lowest = values.first;
     final highest = values.last;
     final padding = (highest - lowest) * 0.15;
@@ -135,17 +153,24 @@ class RateHistoryChart extends StatelessWidget {
 }
 
 /// One date label under the chart.
+///
+/// Every other label is just the day, so seven of them fit without collapsing
+/// into noise.
 class _DayLabel extends StatelessWidget {
-  const _DayLabel({required this.date});
+  const _DayLabel({required this.meta, required this.label});
 
-  final DateTime date;
+  final TitleMeta meta;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsetsDirectional.only(top: 8),
+    return SideTitleWidget(
+      meta: meta,
+      // Pulls the first and last labels back inside the plot area instead of
+      // letting them hang off the edge.
+      fitInside: SideTitleFitInsideData.fromTitleMeta(meta),
       child: Text(
-        RateFormatter.chartDay(date),
+        label,
         style: context.textStyles.bodySmall?.copyWith(
           color: context.colors.onSurfaceVariant,
         ),

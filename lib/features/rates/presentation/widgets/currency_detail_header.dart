@@ -1,5 +1,6 @@
 import 'package:currency_exchange_tracker/core/extensions/context_extensions.dart';
 import 'package:currency_exchange_tracker/core/formatting/rate_formatter.dart';
+import 'package:currency_exchange_tracker/core/theme/app_spacing.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/entities/exchange_rate.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/entities/rate_comparison.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/entities/rate_direction.dart';
@@ -36,7 +37,12 @@ class CurrencyDetailHeader extends StatelessWidget {
     };
 
     return Padding(
-      padding: const EdgeInsetsDirectional.fromSTEB(16, 16, 16, 8),
+      padding: const EdgeInsetsDirectional.fromSTEB(
+        AppSpacing.pageHorizontal,
+        AppSpacing.pageTop,
+        AppSpacing.pageHorizontal,
+        AppSpacing.sectionGap,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

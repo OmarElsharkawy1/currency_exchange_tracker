@@ -212,3 +212,21 @@ Why: [draft] Two moments decided this entry. First: item 2's CLAUDE.md edit ("th
 The bridge-delivery question was answered with evidence (zero cubit references in the bloc test; all six deletions sat between direct bloc.add calls) and then went further than asked — the check revealed that the bridge test used a mock bloc while the bloc tests used direct adds, so nothing joined real cubit → page → real bloc → repository. That seam is now covered by three tests driven purely by pushing booleans into the source streams.
 
 Follow-ups: Three fix rounds issued and closed
+
+# 2026-08-15 — Chart axis fix pass: bottom labels, insets, RTL
+
+Prompt: Edge titles sit flush with the screen edge. Wrap each bottom title in SideTitleWidget(meta: meta, fitInside: SideTitleFitInsideData.fromTitleMeta(meta)) so first/last labels stay inside the chart bounds. Inset the whole chart with the same horizontal padding token the header uses (EdgeInsetsDirectional, no hardcoded numbers), so the first dot aligns with the header's leading edge. Show a label for every point — day-of-month, with the month shown once at the start or on a first-of-month change — formatted through intl, no string concatenation. Verify in RTL: labels must remain inside bounds and read right-to-left with the data.
+
+Output: Every point now labelled (interval: 1), each wrapped in SideTitleWidget with fitInside. New AppSpacing token shared by header and chart padding; zero numeric insets left in the three detail-screen files. Month selection goes through two DateFormat patterns picked by a switch — no concatenation. Ten new tests covering label count, painted-text bounds, both month cases, the padding token, plot-area alignment, and four RTL cases. 273 tests green, analyzer clean, format clean.
+
+Verdict: Accepted
+
+Why: [draft] Two corrections came out of the work rather than out of review, which is the point of writing the assertion before believing the implementation.
+
+First, the bounds assertion was wrong in a way that would have failed a correct implementation. SideTitleWidget's own box stays centred on its tick and legitimately overhangs — the first label measured -15..47 against a 16..784 chart — while fitInside translates the child. Rather than accept the red as an implementation failure, I dumped the real geometry per frame: the painted Text sits at 22..84 and 765.6..778, comfortably inside. The test now measures the Text descendants, which is the thing that actually has to stay in bounds. Had I "fixed" the implementation to satisfy the original assertion, I'd have broken working behavior to please a bad test.
+
+Second, the month rule had a hidden direction dependency. Keyed to plot order it named the month on the leftmost label, which under the mirrored reading was the newest day — the end of the reading direction, not the start. Making it chronological fixed it in both directions.
+
+The RTL requirement was genuinely ambiguous — "read right-to-left with the data" supports either mirroring the series or only making the chrome directional — so it was implemented one way, flagged with the alternative priced at one line, and reversed on instruction. The reversal then removed more than it added: the plotted/chronological split, the date-keyed label map, and the index-space comment in the touch handler all disappeared, leaving \_labelAt(index) and a bare \_onTouch tear-off. That the weaker reading collapsed three indirections is decent evidence it was the right call.
+
+Follow-ups: Two issued and closed — take the weaker RTL reading (drop the Directionality switch, keep the four RTL tests with inverted assertions, simplify the month rule now that oldest is always leftmost), and leave the widget fixture at 6 points rather than growing it to 7. The 7-day window stays pinned where it is actually decided, in the detail bloc test via captured arguments; the widget fixture only exercises label, bounds and scrub behavior.

@@ -1,5 +1,6 @@
 import 'package:bloc_test/bloc_test.dart';
 import 'package:currency_exchange_tracker/core/failures/failures.dart';
+import 'package:currency_exchange_tracker/core/theme/app_spacing.dart';
 import 'package:currency_exchange_tracker/core/theme/app_theme.dart';
 import 'package:currency_exchange_tracker/core/theme/trend_colors.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/entities/currency.dart';
@@ -53,15 +54,19 @@ void main() {
     WidgetTester tester,
     CurrencyDetailState state, {
     RateComparison? comparison,
+    TextDirection textDirection = TextDirection.ltr,
   }) async {
     bloc = MockCurrencyDetailBloc();
     when(() => bloc.state).thenReturn(state);
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.light,
-        home: BlocProvider<CurrencyDetailBloc>.value(
-          value: bloc,
-          child: CurrencyDetailPage(comparison: comparison ?? weakeningUsd),
+        home: Directionality(
+          textDirection: textDirection,
+          child: BlocProvider<CurrencyDetailBloc>.value(
+            value: bloc,
+            child: CurrencyDetailPage(comparison: comparison ?? weakeningUsd),
+          ),
         ),
       ),
     );
@@ -162,6 +167,187 @@ void main() {
       final spots = chart.data.lineBarsData.single.spots;
       expect(spots.last.y, closeTo(52.3560, 1e-3));
       expect(spots.first.y, closeTo(51.8135, 1e-3));
+    });
+  });
+
+  group('bottom axis labels', () {
+    /// A series that crosses a month boundary.
+    final acrossMonths = [
+      ExchangeRate(
+        currency: Currency.usd,
+        rawRate: 0.019300,
+        date: DateTime.utc(2024, 2, 27),
+      ),
+      ExchangeRate(
+        currency: Currency.usd,
+        rawRate: 0.019250,
+        date: DateTime.utc(2024, 2, 28),
+      ),
+      ExchangeRate(
+        currency: Currency.usd,
+        rawRate: 0.019227,
+        date: DateTime.utc(2024, 2, 29),
+      ),
+      ExchangeRate(
+        currency: Currency.usd,
+        rawRate: 0.019200,
+        date: DateTime.utc(2024, 3),
+      ),
+      ExchangeRate(
+        currency: Currency.usd,
+        rawRate: 0.019100,
+        date: DateTime.utc(2024, 3, 2),
+      ),
+    ];
+
+    testWidgets('labels every plotted day', (tester) async {
+      await pumpPage(tester, HistoryLoadSuccess(points: history));
+
+      expect(
+        find.byType(SideTitleWidget),
+        findsNWidgets(history.length),
+      );
+    });
+
+    testWidgets('keeps edge labels inside the chart', (tester) async {
+      await pumpPage(tester, HistoryLoadSuccess(points: history));
+      // fitInside measures its child in a post-frame callback and translates
+      // on the frame after that.
+      await tester.pump();
+
+      final chart = tester.getRect(find.byType(LineChart));
+      // The painted text is what must stay inside: fitInside translates the
+      // child, leaving the wrapper's own box centred on its tick.
+      final labels = find.descendant(
+        of: find.byType(SideTitleWidget),
+        matching: find.byType(Text),
+      );
+      expect(labels, findsNWidgets(history.length));
+      for (final label in labels.evaluate()) {
+        final rect = tester.getRect(find.byWidget(label.widget));
+        expect(rect.left, greaterThanOrEqualTo(chart.left));
+        expect(rect.right, lessThanOrEqualTo(chart.right));
+      }
+    });
+
+    testWidgets('names the month on the first label only', (tester) async {
+      await pumpPage(tester, HistoryLoadSuccess(points: history));
+
+      // History runs Mar 1..Mar 6, so only the first label carries a month.
+      expect(find.text('Mar 1'), findsOneWidget);
+      for (final day in ['2', '3', '4', '5', '6']) {
+        expect(find.text(day), findsOneWidget);
+      }
+      expect(find.text('Mar 2'), findsNothing);
+    });
+
+    testWidgets('names the month again when the month changes', (tester) async {
+      await pumpPage(tester, HistoryLoadSuccess(points: acrossMonths));
+
+      expect(find.text('Feb 27'), findsOneWidget);
+      expect(find.text('28'), findsOneWidget);
+      expect(find.text('29'), findsOneWidget);
+      expect(find.text('Mar 1'), findsOneWidget);
+      expect(find.text('2'), findsOneWidget);
+    });
+
+    testWidgets('insets the chart by the same token as the header', (
+      tester,
+    ) async {
+      await pumpPage(tester, HistoryLoadSuccess(points: history));
+
+      final padding = tester.widget<Padding>(
+        find
+            .ancestor(
+              of: find.byType(LineChart),
+              matching: find.byType(Padding),
+            )
+            .first,
+      );
+      final insets = padding.padding as EdgeInsetsDirectional;
+      expect(insets.start, AppSpacing.pageHorizontal);
+      expect(insets.end, AppSpacing.pageHorizontal);
+    });
+
+    testWidgets('the first dot starts at the header leading edge', (
+      tester,
+    ) async {
+      await pumpPage(tester, HistoryLoadSuccess(points: history));
+
+      final chart = tester.getRect(find.byType(LineChart));
+      final rate = tester.getRect(find.text('1 USD = 52.36 EGP'));
+      expect(chart.left, closeTo(AppSpacing.pageHorizontal, 0.5));
+      expect(rate.left, greaterThanOrEqualTo(chart.left));
+    });
+  });
+
+  group('right-to-left', () {
+    testWidgets('plots time left to right regardless of text direction', (
+      tester,
+    ) async {
+      await pumpPage(
+        tester,
+        HistoryLoadSuccess(points: history),
+        textDirection: TextDirection.rtl,
+      );
+
+      // The axis is data, not prose: oldest stays leftmost, exactly as in LTR.
+      final chart = tester.widget<LineChart>(find.byType(LineChart));
+      final spots = chart.data.lineBarsData.single.spots;
+      expect(spots.first.y, closeTo(51.8135, 1e-3));
+      expect(spots.last.y, closeTo(52.3560, 1e-3));
+    });
+
+    testWidgets('still labels every day, month named at the oldest', (
+      tester,
+    ) async {
+      await pumpPage(
+        tester,
+        HistoryLoadSuccess(points: history),
+        textDirection: TextDirection.rtl,
+      );
+
+      expect(find.byType(SideTitleWidget), findsNWidgets(history.length));
+      expect(find.text('Mar 1'), findsOneWidget);
+      expect(find.text('6'), findsOneWidget);
+    });
+
+    testWidgets('keeps edge labels inside the chart', (tester) async {
+      await pumpPage(
+        tester,
+        HistoryLoadSuccess(points: history),
+        textDirection: TextDirection.rtl,
+      );
+      await tester.pump();
+
+      final chart = tester.getRect(find.byType(LineChart));
+      // The painted text is what must stay inside: fitInside translates the
+      // child, leaving the wrapper's own box centred on its tick.
+      final labels = find.descendant(
+        of: find.byType(SideTitleWidget),
+        matching: find.byType(Text),
+      );
+      expect(labels, findsNWidgets(history.length));
+      for (final label in labels.evaluate()) {
+        final rect = tester.getRect(find.byWidget(label.widget));
+        expect(rect.left, greaterThanOrEqualTo(chart.left));
+        expect(rect.right, lessThanOrEqualTo(chart.right));
+      }
+    });
+
+    testWidgets('scrubs the day the finger is actually on', (tester) async {
+      await pumpPage(
+        tester,
+        HistoryLoadSuccess(points: history),
+        textDirection: TextDirection.rtl,
+      );
+
+      tester
+          .widget<RateHistoryChart>(find.byType(RateHistoryChart))
+          .onPointScrubbed(history.first);
+      await tester.pump();
+
+      expect(find.textContaining('Mar 1, 2024'), findsOneWidget);
     });
   });
 
