@@ -134,3 +134,25 @@ Implement `ExchangeRate` in `features/rates/domain/` exactly per the "Rate math"
 > error • Use 'const' for final variables initialized to a constant value • test/features/rates/domain/exchange_rate_test.dart:87:7 • prefer_const_declarations
 > error • Use 'const' for final variables initialized to a constant value • test/features/rates/domain/exchange_rate_test.dart:99:7 • prefer_const_declarations
 > info • Unnecessary use of a 'double' literal • test/features/rates/domain/exchange_rate_test.dart:113:26 • prefer_int_literals
+
+# Prompt3:
+
+> Build the data layer per CLAUDE.md: (1) RatesResponseDto parsing {date, egp:{~200 rates}} down to the five tracked currencies with a ParseFailure path for malformed/missing keys; (2) RatesRemoteDataSource on Dio with the jsDelivr↔pages.dev host-fallback interceptor, all exceptions mapped to Failures at that boundary; (3) date anchoring off the latest response's date field plus 404 walk-back (max 3 extra steps); (4) RatesLocalDataSource on hive_ce storing JSON strings under a dual policy — latest timestamped/refreshable, historical write-once immutable; (5) RatesRepository abstract in domain + RatesRepositoryImpl with getLatestRates() (latest + yesterday attached) and getHistory(currency, {days = 7}) checking the immutable cache per date first. Tests with mocktail covering fallback trigger, historical cache-hit never touching network, latest-cache staleness, 404 walk-back, exception→Failure mapping table. Inject Clock, no real time in tests.
+
+# Output:
+
+11 production files (DTO, both data sources, repository impl, RateComparison/RatesSnapshot/RatesRepository in domain, CurrencyApiEndpoints + HostFallbackInterceptor + Result typedef in core), DI wired, README documenting jsDelivr as primary. Tests written before each implementation, RED verified per component. 136 tests green, flutter analyze 0 issues, dart format clean. Six under-specified decisions flagged for sign-off rather than silently chosen: Result tuples over throws, 404 skipping the fallback, 15-min latest TTL, best-effort previous day rendering as flat/0, historical entries keyed by the payload's own date (with dedup), and getHistory propagating a per-day failure instead of a partial chart.
+
+Verdict: Accepted
+
+Why: [draft] Hard constraints held: no codegen, no use-case classes, DTO confined to the data layer, 1 / nowhere near presentation, DateTime.now() only in Clock, walk-back capped at 3, dual cache policy real (write-once verified by verifyNever(put)). Tests are behavioral, not mock-shaped — the interceptor and remote source are exercised through a real Dio with a faked HttpClientAdapter, so the fallback and the mapping table are proven against actual transport behavior rather than a stubbed client. Gaps are judgment calls the spec did not cover, surfaced as questions instead of buried defaults.
+
+# Follow-ups:
+
+One issued — a structural correction, not a functional one. Domain files had been written flat in domain/; the follow-up added the canonical tree to CLAUDE.md and required the code to match it: entities into domain/entities/, the abstract contract into domain/repositories/, data/models/ deleted, one type per file. Applied across lib and test (test tree mirrored path for path), imports rewritten, 136 tests still green, analyzer clean.
+
+Two things surfaced during it worth recording:
+
+The tree as written named only three entity files; rate_comparison.dart and rates_snapshot.dart also exist, so they were filed under entities/ and added to the CLAUDE.md listing rather than left undocumented. Still open if you want them separated (e.g. a value_objects/ sibling).
+First move attempt used git mv and failed — the files were never committed, so they weren't under version control. Imports were rewritten before the moves landed, leaving the tree briefly broken; redone with plain mv in the same turn. Root cause is that none of this work is committed yet.
+The six sign-off decisions from the original output remain unanswered — no follow-up touched them.

@@ -1,6 +1,6 @@
-import 'package:currency_exchange_tracker/features/rates/domain/currency.dart';
-import 'package:currency_exchange_tracker/features/rates/domain/exchange_rate.dart';
-import 'package:currency_exchange_tracker/features/rates/domain/rate_direction.dart';
+import 'package:currency_exchange_tracker/features/rates/domain/entities/currency.dart';
+import 'package:currency_exchange_tracker/features/rates/domain/entities/exchange_rate.dart';
+import 'package:currency_exchange_tracker/features/rates/domain/entities/rate_direction.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Builds a rate for [currency] from a raw EGP -> foreign quote.

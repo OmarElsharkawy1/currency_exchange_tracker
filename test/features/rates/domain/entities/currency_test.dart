@@ -1,4 +1,4 @@
-import 'package:currency_exchange_tracker/features/rates/domain/currency.dart';
+import 'package:currency_exchange_tracker/features/rates/domain/entities/currency.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

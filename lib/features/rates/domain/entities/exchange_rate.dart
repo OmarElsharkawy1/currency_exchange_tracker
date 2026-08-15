@@ -1,5 +1,5 @@
-import 'package:currency_exchange_tracker/features/rates/domain/currency.dart';
-import 'package:currency_exchange_tracker/features/rates/domain/rate_direction.dart';
+import 'package:currency_exchange_tracker/features/rates/domain/entities/currency.dart';
+import 'package:currency_exchange_tracker/features/rates/domain/entities/rate_direction.dart';
 import 'package:equatable/equatable.dart';
 
 /// One currency's rate against the Egyptian pound on one date.

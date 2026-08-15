@@ -2,3 +2,4 @@
 library;
 
 export 'failure.dart';
+export 'result.dart';

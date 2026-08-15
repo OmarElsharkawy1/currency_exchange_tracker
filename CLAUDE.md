@@ -31,6 +31,25 @@ API: fawazahmed0 currency-api.
 - DI via `get_it`, composed in `lib/core/di/injection.dart`. Constructor injection
   everywhere; no service-locator calls inside widgets or blocs (only at composition).
 
+### Tree — the feature module matches this exactly. One type per file.
+
+```
+features/rates/
+  domain/
+    entities/         exchange_rate.dart, currency.dart, rate_direction.dart,
+                      rate_comparison.dart, rates_snapshot.dart
+    repositories/     rates_repository.dart (abstract)
+  data/
+    dtos/             rates_response_dto.dart
+    data_sources/     rates_remote_data_source.dart, rates_local_data_source.dart
+    repositories/     rates_repository_impl.dart
+  presentation/
+    blocs/ pages/ widgets/
+```
+
+No `models/` directory: wire types live in `dtos/`, domain types in `entities/`.
+The test tree mirrors this path for path.
+
 ## Rate math — the highest-risk correctness area. Read twice.
 
 The API returns EGP→foreign (`egp.usd = 0.019227` means 1 EGP = 0.019227 USD).
