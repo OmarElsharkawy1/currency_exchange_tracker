@@ -25,6 +25,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:skeletonizer/skeletonizer.dart';
 
+import '../../../../support/phone_surface.dart';
+
 class MockCurrencyDetailBloc
     extends MockBloc<CurrencyDetailEvent, CurrencyDetailState>
     implements CurrencyDetailBloc {}
@@ -71,6 +73,7 @@ void main() {
     CurrencyDetailState state, {
     TextDirection textDirection = TextDirection.ltr,
   }) async {
+    tester.usePhoneSurface(PhoneSurface.small);
     bloc = MockCurrencyDetailBloc();
     when(() => bloc.state).thenReturn(state);
     await tester.pumpWidget(

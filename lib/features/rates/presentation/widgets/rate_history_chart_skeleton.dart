@@ -26,6 +26,19 @@ class RateHistoryChartSkeleton extends StatelessWidget {
     0.66,
   ];
 
+  /// How much of its slot a placeholder column fills.
+  ///
+  /// A fraction, not a fixed width: seven fixed-width children overflow the
+  /// moment the screen is narrower than the test surface, and the real chart
+  /// spaces its dots proportionally anyway.
+  static const double columnWidthFactor = 0.45;
+
+  /// How much of its slot a placeholder date label fills.
+  static const double labelWidthFactor = 0.7;
+
+  /// Height of a placeholder date label.
+  static const double labelHeight = 12;
+
   @override
   Widget build(BuildContext context) {
     return const Skeletonizer(
@@ -56,10 +69,11 @@ class _Silhouette extends StatelessWidget {
           child: LayoutBuilder(
             builder: (context, constraints) => Row(
               crossAxisAlignment: CrossAxisAlignment.end,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 for (final height in RateHistoryChartSkeleton.columnHeights)
-                  _Column(height: constraints.maxHeight * height),
+                  Expanded(
+                    child: _Column(height: constraints.maxHeight * height),
+                  ),
               ],
             ),
           ),
@@ -77,6 +91,9 @@ class _Silhouette extends StatelessWidget {
 }
 
 /// One placeholder column of the silhouette.
+///
+/// Its width is a fraction of the slot the parent `Row` gives it, so seven of
+/// them fit any width the phone has.
 class _Column extends StatelessWidget {
   const _Column({required this.height});
 
@@ -84,10 +101,12 @@ class _Column extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Bone(
-      width: 18,
-      height: height,
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+    return FractionallySizedBox(
+      widthFactor: RateHistoryChartSkeleton.columnWidthFactor,
+      child: Bone(
+        height: height,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+      ),
     );
   }
 }
@@ -99,10 +118,14 @@ class _AxisLabels extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         for (final _ in RateHistoryChartSkeleton.columnHeights)
-          const Bone.text(words: 1, fontSize: 12),
+          const Expanded(
+            child: FractionallySizedBox(
+              widthFactor: RateHistoryChartSkeleton.labelWidthFactor,
+              child: Bone(height: RateHistoryChartSkeleton.labelHeight),
+            ),
+          ),
       ],
     );
   }

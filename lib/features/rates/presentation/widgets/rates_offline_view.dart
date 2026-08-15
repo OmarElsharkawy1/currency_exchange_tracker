@@ -14,7 +14,9 @@ class RatesOfflineView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
+    // Scrollable so a short screen — a phone in the chart slot, or one with
+    // large text — can still reach the button instead of clipping it.
+    return SingleChildScrollView(
       child: Padding(
         padding: const EdgeInsetsDirectional.all(24),
         child: Column(

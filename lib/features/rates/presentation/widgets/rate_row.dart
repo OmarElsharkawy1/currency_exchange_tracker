@@ -50,7 +50,18 @@ class RateRow extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             Expanded(child: _CurrencyIdentity(comparison: comparison)),
-            _RateMovement(comparison: comparison),
+            const SizedBox(width: 8),
+            // Flexible + scale-down keeps the row from overflowing on narrow
+            // handsets: the movement stays right-aligned and shrinks by a hair
+            // when a long rate would otherwise push past the edge, instead of
+            // wrapping to a second line or clipping the change chip.
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: AlignmentDirectional.centerEnd,
+                child: _RateMovement(comparison: comparison),
+              ),
+            ),
           ],
         ),
       ),
@@ -72,6 +83,10 @@ class _CurrencyIdentity extends StatelessWidget {
         Text(
           comparison.currency.englishName,
           style: context.textStyles.titleMedium,
+          // The name is the one thing here that can be shortened without
+          // losing meaning: the rate and its movement are the point.
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
       ],
     );

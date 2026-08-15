@@ -24,6 +24,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
 import '../../../../support/fake_clock.dart';
+import '../../../../support/phone_surface.dart';
 
 class MockRatesListBloc extends MockBloc<RatesListEvent, RatesListState>
     implements RatesListBloc {}
@@ -84,6 +85,8 @@ void main() {
   );
 
   Future<void> pumpApp(WidgetTester tester) async {
+    // The flight is between two phone-width screens; measure it there.
+    tester.usePhoneSurface(PhoneSurface.small);
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.light,

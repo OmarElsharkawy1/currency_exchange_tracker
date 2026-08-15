@@ -212,12 +212,22 @@ class _Movement extends StatelessWidget {
     return Semantics(
       label: RateSemantics.describe(point),
       excludeSemantics: true,
-      child: Row(
+      // A Wrap, not a Row: on a narrow screen the date moves under the
+      // movement instead of being clipped or ellipsized. A truncated date is
+      // worse than a second line.
+      child: Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 8,
+        runSpacing: 2,
         children: [
-          Text(_changeText(point), style: style),
-          const SizedBox(width: 6),
-          Text(_percentText(point), style: style),
-          const SizedBox(width: 8),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(_changeText(point), style: style),
+              const SizedBox(width: 6),
+              Text(_percentText(point), style: style),
+            ],
+          ),
           Text(
             RateFormatter.rateDate(point.date),
             style: context.textStyles.bodySmall?.copyWith(

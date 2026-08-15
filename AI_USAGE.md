@@ -317,3 +317,39 @@ Why: [draft] The interesting constraint was that "labels show the range minimum 
 I put the curve token on the chart rather than in AppMotion as offered: that class is durations and curves for animation, and line smoothing is not motion. Flagged rather than assumed.
 
 Follow-ups: None issued.
+
+# 2026-08-15 — Skeleton overflow at phone widths, phone surface as test default
+
+Prompt: rate_history_chart_skeleton.dart:101 overflows by 64 on device — seven fixed 60-wide children (420) in a 356-wide row after axisValueWidth. Replace the fixed widths with Expanded (or fractions from a LayoutBuilder) so the placeholder row fits any constraints. Then fix the test gap: pump the skeleton and the real chart at 360×640 and 320×568, assert takeException() is null and the skeleton's plot-area left edge equals the loaded chart's. Add a phone-sized surface helper in test/support/ and use it in skeleton, chart, list and detail tests — the 800×600 default is what hid this. Report which tests changed size and whether any of them fail at 320 before the fix.
+
+Output: RateHistoryChartSkeleton bars and label bones now sit inside Expanded + FractionallySizedBox, widths driven by named fractions (columnWidthFactor, labelWidthFactor). MainAxisAlignment.spaceBetween is gone — the flexible slots do the spacing. PhoneSurface (medium 360×640, small 320×568) plus a usePhoneSurface tester extension in test/support/. New chart_phone_sizes_test.dart runs the skeleton and the chart at both, asserts no exception, and asserts the two plot areas share left edge and width. 361 tests green, analyzer clean, format clean.
+
+Verdict: Accepted
+
+Why: [draft] The report you asked for was the important part of this pass, not the fix. Before the fix the existing detail-page and list-page tests failed 49 times at 320 with a RenderFlex overflowed by 184 pixels cascading from the skeleton (144 at 360). After the fix they still failed 49 times — from two different, smaller overflows the skeleton bug had been masking: 19px in the detail header's movement row, and 39px in the list row's contents. Reporting that rather than shipping "green at medium" is what the pass was actually for. The skeleton widths were only the loudest instance of a class of defect.
+
+The one place I used more care than the prompt required was the mid-flight assertion: the phone-sizes test collects the skeleton's plot rect and the chart's plot rect and compares both left and width, so nothing subtle can drift them apart later.
+
+Tests changed to phone size: the two page suites via the shared helper, plus the new chart-sizes file at both widths. currency_badge_hero_test.dart was deliberately not moved this pass — you would ask me to next.
+
+Did anything fail at 320 before the fix: 49 tests, all cascades of a single skeleton RenderFlex overflow: 184px. After: still 49, from two unrelated production overflows now newly visible.
+
+Follow-ups: One issued as the next pass — fix both, pin the page tests at 320.
+
+# 2026-08-15 — 320px layout: header wrap, row ellipsis, state views scrollable, phone surface global
+
+Prompt: Fix both narrow-screen overflows. Detail header movement row: don't ellipsize the date — let it wrap below change/percent (Wrap or two-line). Verify the "Latest" chip fits at 320 with a selection active. List row: Expanded on the name/code column with the name ellipsizing; rate column keeps natural width, no FittedBox on numbers. If any currency's name + rate + badge still can't fit at 320, stop and tell me — that's a design call. Pin page tests at 320 (medium as a second run if cheap), move currency_badge_hero_test.dart to the phone surface, and make the phone surface the default in shared test setup so desktop width is opt-in. Report which tests changed and confirm 320 is green with no takeException.
+
+Output: Detail header movement is now a Wrap — the date drops beneath change + percent when it doesn't fit, chip verified. Name column ellipsizes on one line. A third overflow surfaced along the way: the three state views (error / empty / offline) at short chart-slot heights, wrapped in SingleChildScrollView. test/flutter_test_config.dart makes PhoneSurface.medium the default for every test; useDesktopSurface() is the opt-out. Detail page pinned at 320 and green. Stopped on the list row and reported measurements. 361/365 tests green — the 4 red are the badge-hero cases hitting the list-row overflow, awaiting the design call.
+
+Verdict: Accepted
+
+Why: [draft] The list-row block was the useful outcome. Measured at 320: the rate sentence alone is 275pt in an available 288pt content strip; the badge (40) plus its gap (12) cost 52pt, so the sentence has nowhere to go regardless of what the name column does. Ellipsizing the name — which the prompt suggested — doesn't help, because it's not the name that pushes the row wide. Stopping there was the correct answer; four options were priced without picking one, with a recommendation (shorten the sentence to 52.36 EGP on narrow screens, since the code lives inside the badge and the name sits next to it, so 1 USD = is redundant).
+
+Two implementation notes worth carrying:
+
+The global surface default cannot be applied through setSurfaceSize — that method asserts it is running inside a test body, so a global setUp fails every pure-Dart test with "'inTest': is not true". The fix was to resize platformDispatcher.implicitView.physicalSize directly with devicePixelRatio = 1, which works from anywhere. Debugging why 200-odd pure-Dart tests suddenly went red gave the answer; guessing another mechanism would have taken longer.
+
+The state-view overflow (18px vertical) was a genuine third defect that only appeared once the header stopped clipping. Applied identically to all three views — mechanical, no design tradeoff.
+
+Follow-ups:
