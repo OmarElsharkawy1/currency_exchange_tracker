@@ -3,6 +3,7 @@ import 'package:currency_exchange_tracker/core/clock/clock.dart';
 import 'package:currency_exchange_tracker/core/connectivity/connectivity_cubit.dart';
 import 'package:currency_exchange_tracker/core/connectivity/connectivity_sources.dart';
 import 'package:currency_exchange_tracker/core/network/host_fallback_interceptor.dart';
+import 'package:currency_exchange_tracker/core/theme/theme_mode_store.dart';
 import 'package:currency_exchange_tracker/features/rates/data/data_sources/rates_local_data_source.dart';
 import 'package:currency_exchange_tracker/features/rates/data/data_sources/rates_remote_data_source.dart';
 import 'package:currency_exchange_tracker/features/rates/data/repositories/rates_repository_impl.dart';
@@ -31,6 +32,9 @@ Future<void> configureDependencies() async {
   final ratesBox = await Hive.openBox<String>(ratesCacheBoxName);
   getIt
     ..registerSingleton<Box<String>>(ratesBox)
+    ..registerLazySingleton<ThemeModeStore>(
+      () => ThemeModeStore(getIt<Box<String>>()),
+    )
     ..registerLazySingleton<Dio>(() {
       final dio = Dio(
         BaseOptions(

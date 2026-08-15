@@ -4,6 +4,8 @@ import 'package:currency_exchange_tracker/core/clock/clock.dart';
 import 'package:currency_exchange_tracker/core/connectivity/connectivity_cubit.dart';
 import 'package:currency_exchange_tracker/core/failures/failures.dart';
 import 'package:currency_exchange_tracker/core/theme/app_theme.dart';
+import 'package:currency_exchange_tracker/core/theme/theme_mode_controller.dart';
+import 'package:currency_exchange_tracker/core/theme/theme_mode_scope.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/entities/currency.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/entities/exchange_rate.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/entities/rate_comparison.dart';
@@ -110,14 +112,17 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.light,
-        home: RepositoryProvider<Clock>.value(
-          value: clock,
-          child: MultiBlocProvider(
-            providers: [
-              BlocProvider<RatesListBloc>.value(value: bloc),
-              BlocProvider<ConnectivityCubit>.value(value: connectivity),
-            ],
-            child: const RatesListPage(),
+        home: ThemeModeScope(
+          controller: ThemeModeController(),
+          child: RepositoryProvider<Clock>.value(
+            value: clock,
+            child: MultiBlocProvider(
+              providers: [
+                BlocProvider<RatesListBloc>.value(value: bloc),
+                BlocProvider<ConnectivityCubit>.value(value: connectivity),
+              ],
+              child: const RatesListPage(),
+            ),
           ),
         ),
       ),

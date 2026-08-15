@@ -1,5 +1,6 @@
 import 'package:currency_exchange_tracker/core/extensions/context_extensions.dart';
 import 'package:currency_exchange_tracker/core/theme/app_spacing.dart';
+import 'package:currency_exchange_tracker/core/theme/theme_mode_button.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/entities/currency.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/entities/exchange_rate.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/entities/rate_comparison.dart';
@@ -45,7 +46,10 @@ class _CurrencyDetailPageState extends State<CurrencyDetailPage> {
     final currency = widget.comparison.currency;
 
     return Scaffold(
-      appBar: AppBar(title: Text(currency.englishName)),
+      appBar: AppBar(
+        title: Text(currency.englishName),
+        actions: const [ThemeModeButton()],
+      ),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,

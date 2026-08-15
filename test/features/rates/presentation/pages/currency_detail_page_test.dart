@@ -2,6 +2,9 @@ import 'package:bloc_test/bloc_test.dart';
 import 'package:currency_exchange_tracker/core/failures/failures.dart';
 import 'package:currency_exchange_tracker/core/theme/app_spacing.dart';
 import 'package:currency_exchange_tracker/core/theme/app_theme.dart';
+import 'package:currency_exchange_tracker/core/theme/theme_mode_button.dart';
+import 'package:currency_exchange_tracker/core/theme/theme_mode_controller.dart';
+import 'package:currency_exchange_tracker/core/theme/theme_mode_scope.dart';
 import 'package:currency_exchange_tracker/core/theme/trend_colors.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/entities/currency.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/entities/exchange_rate.dart';
@@ -49,6 +52,11 @@ void main() {
   });
 
   late MockCurrencyDetailBloc bloc;
+  late ThemeModeController themeMode;
+
+  setUp(() => themeMode = ThemeModeController());
+
+  tearDown(() => themeMode.dispose());
 
   Future<void> pumpPage(
     WidgetTester tester,
@@ -63,9 +71,12 @@ void main() {
         theme: AppTheme.light,
         home: Directionality(
           textDirection: textDirection,
-          child: BlocProvider<CurrencyDetailBloc>.value(
-            value: bloc,
-            child: CurrencyDetailPage(comparison: comparison ?? weakeningUsd),
+          child: ThemeModeScope(
+            controller: themeMode,
+            child: BlocProvider<CurrencyDetailBloc>.value(
+              value: bloc,
+              child: CurrencyDetailPage(comparison: comparison ?? weakeningUsd),
+            ),
           ),
         ),
       ),
@@ -113,6 +124,23 @@ void main() {
 
       final hero = tester.widget<Hero>(find.byType(Hero));
       expect(hero.tag, CurrencyDetailPage.heroTagFor(Currency.usd));
+    });
+  });
+
+  group('the theme switch', () {
+    testWidgets('is on this screen too, not just the list', (tester) async {
+      await pumpPage(tester, const HistoryLoadInProgress());
+
+      expect(find.byType(ThemeModeButton), findsOneWidget);
+    });
+
+    testWidgets('cycles from here as well', (tester) async {
+      await pumpPage(tester, const HistoryLoadInProgress());
+
+      await tester.tap(find.byType(ThemeModeButton));
+      await tester.pump();
+
+      expect(themeMode.value, ThemeMode.light);
     });
   });
 

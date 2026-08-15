@@ -5,6 +5,8 @@ import 'package:currency_exchange_tracker/core/connectivity/connectivity_state.d
 import 'package:currency_exchange_tracker/core/failures/failures.dart';
 import 'package:currency_exchange_tracker/core/navigation/app_routes.dart';
 import 'package:currency_exchange_tracker/core/theme/app_theme.dart';
+import 'package:currency_exchange_tracker/core/theme/theme_mode_controller.dart';
+import 'package:currency_exchange_tracker/core/theme/theme_mode_scope.dart';
 import 'package:currency_exchange_tracker/core/theme/trend_colors.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/entities/currency.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/entities/exchange_rate.dart';
@@ -72,23 +74,30 @@ void main() {
   late MockRatesListBloc bloc;
   late MockConnectivityCubit connectivity;
   late FakeClock clock;
+  late ThemeModeController themeMode;
 
   setUp(() {
     bloc = MockRatesListBloc();
     connectivity = MockConnectivityCubit();
     clock = FakeClock(DateTime(2024, 3, 6, 9, 10));
+    themeMode = ThemeModeController();
   });
+
+  tearDown(() => themeMode.dispose());
 
   Widget wrap(Widget child) => MaterialApp(
     theme: AppTheme.light,
-    home: RepositoryProvider<Clock>.value(
-      value: clock,
-      child: MultiBlocProvider(
-        providers: [
-          BlocProvider<RatesListBloc>.value(value: bloc),
-          BlocProvider<ConnectivityCubit>.value(value: connectivity),
-        ],
-        child: child,
+    home: ThemeModeScope(
+      controller: themeMode,
+      child: RepositoryProvider<Clock>.value(
+        value: clock,
+        child: MultiBlocProvider(
+          providers: [
+            BlocProvider<RatesListBloc>.value(value: bloc),
+            BlocProvider<ConnectivityCubit>.value(value: connectivity),
+          ],
+          child: child,
+        ),
       ),
     ),
   );
@@ -381,14 +390,19 @@ void main() {
             pushed.add(settings);
             return MaterialPageRoute<void>(
               settings: settings,
-              builder: (_) => RepositoryProvider<Clock>.value(
-                value: clock,
-                child: MultiBlocProvider(
-                  providers: [
-                    BlocProvider<RatesListBloc>.value(value: bloc),
-                    BlocProvider<ConnectivityCubit>.value(value: connectivity),
-                  ],
-                  child: const RatesListPage(),
+              builder: (_) => ThemeModeScope(
+                controller: themeMode,
+                child: RepositoryProvider<Clock>.value(
+                  value: clock,
+                  child: MultiBlocProvider(
+                    providers: [
+                      BlocProvider<RatesListBloc>.value(value: bloc),
+                      BlocProvider<ConnectivityCubit>.value(
+                        value: connectivity,
+                      ),
+                    ],
+                    child: const RatesListPage(),
+                  ),
                 ),
               ),
             );

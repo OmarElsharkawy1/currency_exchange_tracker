@@ -3,6 +3,9 @@ import 'package:currency_exchange_tracker/core/connectivity/connectivity_cubit.d
 import 'package:currency_exchange_tracker/core/di/injection.dart';
 import 'package:currency_exchange_tracker/core/navigation/app_routes.dart';
 import 'package:currency_exchange_tracker/core/theme/app_theme.dart';
+import 'package:currency_exchange_tracker/core/theme/theme_mode_controller.dart';
+import 'package:currency_exchange_tracker/core/theme/theme_mode_scope.dart';
+import 'package:currency_exchange_tracker/core/theme/theme_mode_store.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/entities/rate_comparison.dart';
 import 'package:currency_exchange_tracker/features/rates/presentation/blocs/currency_detail_bloc.dart';
 import 'package:currency_exchange_tracker/features/rates/presentation/blocs/currency_detail_event.dart';
@@ -17,9 +20,34 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 ///
 /// The composition root reaches into the service locator here, once, so no
 /// widget or bloc below has to. Every screen gets its bloc from a route.
-class CurrencyExchangeTrackerApp extends StatelessWidget {
-  /// Creates the app root.
-  const CurrencyExchangeTrackerApp({super.key});
+class CurrencyExchangeTrackerApp extends StatefulWidget {
+  /// Creates the app root, starting from the theme the user last chose.
+  const CurrencyExchangeTrackerApp({
+    this.initialThemeMode = ThemeMode.system,
+    super.key,
+  });
+
+  /// The theme mode restored from storage before the first frame.
+  final ThemeMode initialThemeMode;
+
+  @override
+  State<CurrencyExchangeTrackerApp> createState() =>
+      _CurrencyExchangeTrackerAppState();
+}
+
+class _CurrencyExchangeTrackerAppState
+    extends State<CurrencyExchangeTrackerApp> {
+  /// The chosen theme. Lives for the life of the app and is disposed with it.
+  late final ThemeModeController _themeMode = ThemeModeController(
+    initial: widget.initialThemeMode,
+    store: getIt<ThemeModeStore>(),
+  );
+
+  @override
+  void dispose() {
+    _themeMode.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -30,13 +58,22 @@ class CurrencyExchangeTrackerApp extends StatelessWidget {
       value: getIt<Clock>(),
       child: BlocProvider<ConnectivityCubit>.value(
         value: getIt<ConnectivityCubit>(),
-        child: MaterialApp(
-          title: 'Currency Exchange Tracker',
-          debugShowCheckedModeBanner: false,
-          theme: AppTheme.light,
-          darkTheme: AppTheme.dark,
-          initialRoute: AppRoutes.ratesList,
-          onGenerateRoute: _onGenerateRoute,
+        child: ThemeModeScope(
+          controller: _themeMode,
+          // Only the app shell re-runs when the mode changes; the routes
+          // below rebuild because their theme did, not because of a listener.
+          child: ValueListenableBuilder<ThemeMode>(
+            valueListenable: _themeMode,
+            builder: (context, themeMode, child) => MaterialApp(
+              title: 'Currency Exchange Tracker',
+              debugShowCheckedModeBanner: false,
+              theme: AppTheme.light,
+              darkTheme: AppTheme.dark,
+              themeMode: themeMode,
+              initialRoute: AppRoutes.ratesList,
+              onGenerateRoute: _onGenerateRoute,
+            ),
+          ),
         ),
       ),
     );

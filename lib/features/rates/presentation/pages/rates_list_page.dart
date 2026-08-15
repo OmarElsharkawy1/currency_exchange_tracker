@@ -3,6 +3,7 @@ import 'package:currency_exchange_tracker/core/connectivity/connectivity_state.d
 import 'package:currency_exchange_tracker/core/failures/failure.dart';
 import 'package:currency_exchange_tracker/core/failures/failure_messages.dart';
 import 'package:currency_exchange_tracker/core/navigation/app_routes.dart';
+import 'package:currency_exchange_tracker/core/theme/theme_mode_button.dart';
 import 'package:currency_exchange_tracker/features/rates/domain/entities/rate_comparison.dart';
 import 'package:currency_exchange_tracker/features/rates/presentation/blocs/rates_list_bloc.dart';
 import 'package:currency_exchange_tracker/features/rates/presentation/blocs/rates_list_event.dart';
@@ -24,7 +25,10 @@ class RatesListPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Exchange rates')),
+      appBar: AppBar(
+        title: const Text('Exchange rates'),
+        actions: const [ThemeModeButton()],
+      ),
       body: MultiBlocListener(
         listeners: [
           BlocListener<RatesListBloc, RatesListState>(
